@@ -2,6 +2,8 @@
 
 Браузерная симуляция эволюции: бесконечное двумерное поле, тысячи агентов (позже), детерминированный tick.
 
+Полная документация: [docs/README.md](docs/README.md).
+
 ## Стек
 
 | Слой | Сейчас | Позже |
@@ -47,14 +49,15 @@ npm run dev
 - `GET /api/world`
 - `GET /api/world/cell?x=&y=`
 - `GET /api/world/cells?min_x=&min_y=&max_x=&max_y=`
-- `POST /api/world/step` `{ "n": 1 }` → `{ "world": {...}, "agents": {...} }`
+- `POST /api/world/step` `{ "n": 1 }` → `{ "world", "agents", "interactions", "meetings_started", "pd_rounds" }`
 - `POST /api/world/reset` `{ "seed": 1 }`
 - `GET /api/agents` (опционально `min_x`, `min_y`, `max_x`, `max_y`)
 - `POST /api/agents/generate` `{ "count": 100, "density": 1.0 }`
+- `GET /api/agents/{id}/observation`
 
 Агент — круг в центре ячейки. Генерация случайная от центра `(0, 0)`, одна ячейка — один агент. Плотность: выше = компактнее у центра.
 
-Движение: каждый tick все агенты одновременно выбирают действие (STAY/NORTH/SOUTH/EAST/WEST, пока случайно), намерения разрешаются, позиции обновляются атомарно. Конфликт за клетку — побеждает минимальный `agent_id`.
+Движение и контакт: каждый tick свободные агенты одновременно выбирают `Move` или `Interact` (временная случайная стратегия), затем разрешаются контакты → встречи (PD) и движение. Конфликт за клетку — побеждает минимальный `agent_id`.
 
 Восприятие: `vision_radius` / `interaction_radius` (Чебышёв), `engine.observe(agent_id)` → `Observation` с относительными координатами. Клик по агенту на карте — debug-визуализация зон.
 
