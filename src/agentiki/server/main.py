@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from agentiki.sim import create_engine
 from agentiki.server.schemas import (
+    LifeRulesIn,
     AgentOut,
     AgentsOut,
     CellOut,
@@ -32,6 +33,27 @@ MAX_VIEWPORT_CELLS = 20_000
 
 def _engine(request: Request):
     return request.app.state.engine
+
+
+
+def _apply_life(engine, life: LifeRulesIn) -> None:
+    try:
+        engine.set_life_rules(
+            start_hp=life.start_hp,
+            hp_move=life.hp_move,
+            hp_stay=life.hp_stay,
+            hp_play_decision=life.hp_play_decision,
+            hp_game=life.hp_game,
+            reward=life.reward,
+            temptation=life.temptation,
+            punishment=life.punishment,
+            sucker=life.sucker,
+        )
+    except ValueError as exc:
+        message = str(exc)
+        if "payoff matrix" in message:
+            message = "Приток: предатель > оба C > оба D > кооператор"
+        raise HTTPException(status_code=400, detail=message) from exc
 
 
 def _agent_out(agent) -> AgentOut:
@@ -176,6 +198,7 @@ def world_cells(
 @app.post("/api/world/step", response_model=StepOut)
 def world_step(request: Request, body: StepIn) -> StepOut:
     engine = _engine(request)
+    _apply_life(engine, body.life)
     result = engine.step(body.n)
     return StepOut(
         world=world(request),
@@ -211,6 +234,7 @@ def list_agents(
 @app.post("/api/agents/generate", response_model=AgentsOut)
 def generate_agents(request: Request, body: GenerateAgentsIn) -> AgentsOut:
     engine = _engine(request)
+    _apply_life(engine, body.life)
     try:
         agents = engine.generate_agents(
             body.count,

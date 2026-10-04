@@ -6,8 +6,9 @@ import unittest
 from agentiki.sim.actions import InteractAction, MoveAction, MoveDirection
 from agentiki.sim.agents import START_HP, Agent, AgentPopulation
 from agentiki.sim.config import SimulationConfig
+from agentiki.sim.engine import PythonEngine
 from agentiki.sim.meetings import ContinueChoice, MeetingStore
-from agentiki.sim.pd import PDChoice
+from agentiki.sim.pd import PayoffMatrix, PDChoice
 from agentiki.sim.tick import step_tick
 
 
@@ -92,6 +93,51 @@ class HpTests(unittest.TestCase):
         # stay + interact decision + game + leave decision, plus mutual cooperate +3
         self.assertEqual(pop.get(1).hp, START_HP - 4 + 3)
         self.assertEqual(pop.get(2).hp, START_HP - 4 + 3)
+
+    def test_nondefault_life_rules_drive_spawn_and_tick(self) -> None:
+        engine = PythonEngine()
+        engine.set_life_rules(
+            start_hp=15,
+            hp_move=4,
+            hp_stay=0,
+            hp_play_decision=0,
+            hp_game=0,
+            reward=4,
+            temptation=7,
+            punishment=2,
+            sucker=0,
+        )
+        spawned = engine.generate_agents(1, 1.0)
+        self.assertEqual(spawned[0].hp, 15)
+        self.assertEqual(engine.config.hp_move, 4)
+        self.assertEqual(engine.config.payoff_matrix, PayoffMatrix(reward=4, temptation=7, punishment=2, sucker=0))
+
+        pop = AgentPopulation()
+        pop.place(Agent(id=1, cell_x=0, cell_y=0, hp=15))
+        step_tick(
+            pop,
+            engine.config,
+            _FixedStrategy(MoveAction(MoveDirection.EAST)),
+            0,
+            random.Random(0),
+            MeetingStore(),
+        )
+        self.assertEqual(pop.get(1).hp, 11)
+
+        meeting = AgentPopulation()
+        meeting.place(Agent(id=1, cell_x=0, cell_y=0, hp=15))
+        meeting.place(Agent(id=2, cell_x=1, cell_y=0, hp=15))
+        step_tick(
+            meeting,
+            engine.config,
+            _FixedStrategy(InteractAction(target_agent_id=-1), pd=PDChoice.COOPERATE),
+            0,
+            random.Random(0),
+            MeetingStore(),
+        )
+        # Costs are 0, so mutual cooperate is a pure +4 on each agent.
+        self.assertEqual(meeting.get(1).hp, 19)
+        self.assertEqual(meeting.get(2).hp, 19)
 
     def test_zero_hp_removes_agent(self) -> None:
         pop = _one(MoveDirection.STAY)

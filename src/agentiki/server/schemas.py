@@ -26,8 +26,24 @@ class ResetIn(BaseModel):
     seed: int | None = None
 
 
+
+class LifeRulesIn(BaseModel):
+    """Life costs and PD incomes. Defaults match the engine constants."""
+
+    start_hp: int = Field(default=60, ge=1)
+    hp_move: int = Field(default=2, ge=0)
+    hp_stay: int = Field(default=1, ge=0)
+    hp_play_decision: int = Field(default=1, ge=0)
+    hp_game: int = Field(default=1, ge=0)
+    reward: int = Field(default=3, ge=0)
+    temptation: int = Field(default=5, ge=0)
+    punishment: int = Field(default=1, ge=0)
+    sucker: int = Field(default=0, ge=0)
+
+
 class StepIn(BaseModel):
     n: int = Field(default=1, ge=0, le=10_000)
+    life: LifeRulesIn = Field(default_factory=LifeRulesIn)
 
 
 class AgentOut(BaseModel):
@@ -48,9 +64,10 @@ class AgentsOut(BaseModel):
 
 class GenerateAgentsIn(BaseModel):
     count: int = Field(default=100, ge=1, le=100_000)
-    density: float = Field(default=1.0, ge=0.01, le=10.0)
+    density: float = Field(default=1.0, ge=1.0, le=10.0)
     origin_x: int = 0
     origin_y: int = 0
+    life: LifeRulesIn = Field(default_factory=LifeRulesIn)
 
 
 class InteractionOut(BaseModel):

@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
+from dataclasses import replace
+
 from agentiki.sim.agents import Agent, AgentPopulation
 from agentiki.sim.config import SimulationConfig
+from agentiki.sim.pd import PayoffMatrix
 from agentiki.sim.interactions import Interaction
 from agentiki.sim.meetings import MeetingStore
 from agentiki.sim.results import StepResult
@@ -159,6 +162,34 @@ class PythonEngine:
             start_hp=self._config.start_hp,
         )
 
+    def set_life_rules(
+        self,
+        *,
+        start_hp: int,
+        hp_move: int,
+        hp_stay: int,
+        hp_play_decision: int,
+        hp_game: int,
+        reward: int,
+        temptation: int,
+        punishment: int,
+        sucker: int,
+    ) -> None:
+        # Later ticks and new spawns use these costs and incomes.
+        self._config = replace(
+            self._config,
+            start_hp=start_hp,
+            hp_move=hp_move,
+            hp_stay=hp_stay,
+            hp_play_decision=hp_play_decision,
+            hp_game=hp_game,
+            payoff_matrix=PayoffMatrix(
+                reward=reward,
+                temptation=temptation,
+                punishment=punishment,
+                sucker=sucker,
+            ),
+        )
 
     def observe(self, agent_id: int) -> Observation:
         agent = self._agents.get(agent_id)
