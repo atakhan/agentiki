@@ -11,3 +11,4 @@ web/dist/
 .env
 .DS_Store
 *.log
+data/world_configs/

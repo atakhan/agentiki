@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import ConfigScreen, { EMPTY_WORLD_CONFIG } from "./components/ConfigScreen";
+import HomeScreen from "./components/HomeScreen";
+import LoadScreen from "./components/LoadScreen";
 import TopBar from "./components/TopBar";
 import WorldCanvas from "./components/WorldCanvas";
 import {
-  fetchAgents,
+  DEFAULT_LIFE_RULES,
   fetchObservation,
   fetchWorld,
   generateAgents,
+  listWorldConfigs,
+  loadWorldConfig,
+  resetWorld,
   stepWorld,
+  type LifeRules,
+  type WorldConfig,
 } from "./api";
 import type { Agent } from "./types/agent";
 import type { VisibleAgentObs } from "./types/observation";
@@ -19,19 +27,26 @@ import {
 import { InteractionOverlay } from "./world/interactionOverlay";
 
 const ORIGIN_CAMERA: Camera = { x: 0, y: 0, zoom: 1 };
-const DEFAULT_AGENT_COUNT = 100;
-const DEFAULT_AGENT_DENSITY = 1.0;
 const PLAY_INTERVAL_MS = 1000;
 
+type Screen = "home" | "load" | "config" | "sim";
+
 export default function App() {
+  const [screen, setScreen] = useState<Screen>("home");
   const [camera, setCamera] = useState<Camera>(ORIGIN_CAMERA);
   const [cellPx, setCellPx] = useState(DEFAULT_CELL_PX);
   const [backend, setBackend] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [agentCount, setAgentCount] = useState(DEFAULT_AGENT_COUNT);
-  const [agentDensity, setAgentDensity] = useState(DEFAULT_AGENT_DENSITY);
-  const [generating, setGenerating] = useState(false);
+  const [lifeRules, setLifeRules] = useState<LifeRules>(DEFAULT_LIFE_RULES);
+  const sessionConfigRef = useRef<WorldConfig | null>(null);
+  const [configDraft, setConfigDraft] = useState<WorldConfig>(EMPTY_WORLD_CONFIG);
+  const [configKey, setConfigKey] = useState(0);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [loadNames, setLoadNames] = useState<string[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadingList, setLoadingList] = useState(false);
   const [stepping, setStepping] = useState(false);
   const [playing, setPlaying] = useState(false);
   const steppingRef = useRef(false);
@@ -39,27 +54,20 @@ export default function App() {
   const [interactionRadius, setInteractionRadius] = useState(1);
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [visibleAgents, setVisibleAgents] = useState<VisibleAgentObs[]>([]);
-  const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(
-    null,
-  );
-  const [lastStepInteractions, setLastStepInteractions] = useState(0);
+  const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
   const [lastStepPdRounds, setLastStepPdRounds] = useState(0);
   const [interactionPulse, setInteractionPulse] = useState(0);
   const interactionOverlayRef = useRef(new InteractionOverlay());
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([fetchWorld(), fetchAgents()])
-      .then(([world, agentState]) => {
+    fetchWorld()
+      .then((world) => {
         if (cancelled) {
           return;
         }
         setBackend(world.backend);
         setCellPx(clampCellPx(world.default_cell_px));
-        setTick(world.tick);
-        setVisionRadius(world.vision_radius);
-        setInteractionRadius(world.interaction_radius);
-        setAgents(agentState.agents);
       })
       .catch(() => {
         if (!cancelled) {
@@ -88,24 +96,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    void refreshObservation(selectedAgentId);
-  }, [selectedAgentId, agents, tick, refreshObservation]);
-
-  const handleGenerateAgents = useCallback(async () => {
-    setPlaying(false);
-    setSelectedAgentId(null);
-    setGenerating(true);
-    try {
-      const result = await generateAgents(agentCount, agentDensity);
-      setAgents(result.agents);
-      const world = await fetchWorld();
-      setTick(world.tick);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setGenerating(false);
+    if (screen !== "sim") {
+      return;
     }
-  }, [agentCount, agentDensity]);
+    void refreshObservation(selectedAgentId);
+  }, [screen, selectedAgentId, agents, tick, refreshObservation]);
 
   const handleStep = useCallback(async (n: number) => {
     if (steppingRef.current) {
@@ -114,10 +109,9 @@ export default function App() {
     steppingRef.current = true;
     setStepping(true);
     try {
-      const result = await stepWorld(n);
+      const result = await stepWorld(n, lifeRules);
       setTick(result.world.tick);
       setAgents(result.agents.agents);
-      setLastStepInteractions(result.interactions.length);
       setLastStepPdRounds(result.pd_rounds.length);
       interactionOverlayRef.current.add(result.interactions);
       interactionOverlayRef.current.addPdRounds(result.pd_rounds);
@@ -131,10 +125,10 @@ export default function App() {
       steppingRef.current = false;
       setStepping(false);
     }
-  }, []);
+  }, [lifeRules]);
 
   useEffect(() => {
-    if (!playing || backend === null || agents.length === 0) {
+    if (!playing || backend === null || agents.length === 0 || screen !== "sim") {
       return;
     }
 
@@ -154,7 +148,130 @@ export default function App() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [playing, backend, agents.length, handleStep]);
+  }, [playing, backend, agents.length, handleStep, screen]);
+
+  const openNew = () => {
+    setPlaying(false);
+    setStartError(null);
+    setConfigDraft(EMPTY_WORLD_CONFIG);
+    setConfigKey((value) => value + 1);
+    setScreen("config");
+  };
+
+  const openLoad = async () => {
+    setPlaying(false);
+    setLoadError(null);
+    setLoadingList(true);
+    setScreen("load");
+    try {
+      setLoadNames(await listWorldConfigs());
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Не удалось загрузить список");
+      setLoadNames([]);
+    } finally {
+      setLoadingList(false);
+    }
+  };
+
+  const openSaved = async (name: string) => {
+    setStartError(null);
+    try {
+      const loaded = await loadWorldConfig(name);
+      setConfigDraft(loaded);
+      setConfigKey((value) => value + 1);
+      setScreen("config");
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Не удалось открыть мир");
+    }
+  };
+
+  const handleStart = async (config: WorldConfig) => {
+    setStarting(true);
+    setStartError(null);
+    setPlaying(false);
+    setSelectedAgentId(null);
+    try {
+      const world = await resetWorld();
+      const result = await generateAgents(config.count, config.density, config.life);
+      setBackend(world.backend);
+      setTick(0);
+      setAgents(result.agents);
+      setLifeRules(config.life);
+      sessionConfigRef.current = config;
+      setLastStepPdRounds(0);
+      interactionOverlayRef.current = new InteractionOverlay();
+      setCamera(ORIGIN_CAMERA);
+      setScreen("sim");
+      const after = await fetchWorld();
+      setTick(after.tick);
+    } catch (error) {
+      setStartError(error instanceof Error ? error.message : "Не удалось запустить мир");
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const goHome = () => {
+    setPlaying(false);
+    setScreen("home");
+  };
+
+  const handleRestart = async () => {
+    const config = sessionConfigRef.current;
+    if (config === null || steppingRef.current) {
+      return;
+    }
+    setPlaying(false);
+    steppingRef.current = true;
+    setStepping(true);
+    setSelectedAgentId(null);
+    try {
+      await resetWorld();
+      const result = await generateAgents(config.count, config.density, config.life);
+      setAgents(result.agents);
+      setLifeRules(config.life);
+      setLastStepPdRounds(0);
+      interactionOverlayRef.current = new InteractionOverlay();
+      setInteractionPulse((value) => value + 1);
+      const after = await fetchWorld();
+      setTick(after.tick);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      steppingRef.current = false;
+      setStepping(false);
+    }
+  };
+
+  if (screen === "home") {
+    return <HomeScreen offline={backend === null} onNew={openNew} onLoad={() => void openLoad()} />;
+  }
+
+  if (screen === "load") {
+    return (
+      <LoadScreen
+        names={loadNames}
+        loading={loadingList}
+        error={loadError}
+        onBack={goHome}
+        onPick={(name) => void openSaved(name)}
+      />
+    );
+  }
+
+  if (screen === "config") {
+    return (
+      <ConfigScreen
+        key={configKey}
+        initial={configDraft}
+        offline={backend === null}
+        starting={starting}
+        startError={startError}
+        onBack={goHome}
+        onStart={(config) => void handleStart(config)}
+      />
+    );
+  }
 
   const cellLabel = hoverCell ?? {
     x: Math.floor(camera.x),
@@ -167,15 +284,10 @@ export default function App() {
         zoom={camera.zoom}
         cellPx={cellPx}
         backend={backend}
-        agentCount={agentCount}
-        agentDensity={agentDensity}
         placedAgents={agents.length}
         tick={tick}
-        lastStepInteractions={lastStepInteractions}
-        lastStepPdRounds={lastStepPdRounds}
-        generating={generating}
-        stepping={stepping}
         playing={playing}
+        stepping={stepping}
         onZoomChange={(zoom) =>
           setCamera((current) => ({ ...current, zoom: clampZoom(zoom) }))
         }
@@ -184,15 +296,13 @@ export default function App() {
             setCellPx(clampCellPx(px));
           }
         }}
-        onAgentCountChange={setAgentCount}
-        onAgentDensityChange={setAgentDensity}
-        onGenerateAgents={handleGenerateAgents}
-        onStep={handleStep}
         onTogglePlay={() => setPlaying((current) => !current)}
+        onRestart={() => void handleRestart()}
         onResetView={() => {
           setCamera(ORIGIN_CAMERA);
           setHoverCell(null);
         }}
+        onBack={goHome}
       />
       <div className="relative min-h-0 flex-1">
         <WorldCanvas
@@ -220,9 +330,8 @@ export default function App() {
                   : ""}
               </div>
               <div className="opacity-70">
-                hp{" "}
-                {agents.find((agent) => agent.id === selectedAgentId)?.hp ??
-                  0}{" "}
+                жизнь{" "}
+                {agents.find((agent) => agent.id === selectedAgentId)?.hp ?? 0}{" "}
                 · tick {tick} · PD {lastStepPdRounds} · видит{" "}
                 {visibleAgents.length} · зрение {visionRadius} · взаимодействие{" "}
                 {interactionRadius}

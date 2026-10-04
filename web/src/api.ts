@@ -27,6 +27,16 @@ export const DEFAULT_LIFE_RULES: LifeRules = {
   cooperator: 0,
 };
 
+export const DEFAULT_AGENT_COUNT = 100;
+export const DEFAULT_AGENT_DENSITY = 1;
+
+export type WorldConfig = {
+  name: string;
+  count: number;
+  density: number;
+  life: LifeRules;
+};
+
 type LifeBody = {
   start_hp: number;
   hp_move: number;
@@ -50,6 +60,20 @@ function lifeBody(life: LifeRules): LifeBody {
     punishment: life.bothDefect,
     temptation: life.defector,
     sucker: life.cooperator,
+  };
+}
+
+function lifeFromBody(raw: LifeBody): LifeRules {
+  return {
+    startHp: raw.start_hp,
+    moveCost: raw.hp_move,
+    stayCost: raw.hp_stay,
+    decisionCost: raw.hp_play_decision,
+    roundCost: raw.hp_game,
+    bothCooperate: raw.reward,
+    bothDefect: raw.punishment,
+    defector: raw.temptation,
+    cooperator: raw.sucker,
   };
 }
 
@@ -124,6 +148,18 @@ export async function stepWorld(
   return (await res.json()) as StepResponse;
 }
 
+export async function resetWorld(): Promise<WorldInfo> {
+  const res = await fetch("/api/world/reset", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    throw new Error(await readApiError(res));
+  }
+  return (await res.json()) as WorldInfo;
+}
+
 export async function fetchObservation(
   agentId: number,
 ): Promise<ObservationResponse> {
@@ -148,4 +184,63 @@ export async function generateAgents(
     throw new Error(await readApiError(res));
   }
   return (await res.json()) as AgentsResponse;
+}
+
+export async function listWorldConfigs(): Promise<string[]> {
+  const res = await fetch("/api/world-configs");
+  if (!res.ok) {
+    throw new Error(await readApiError(res));
+  }
+  const body = (await res.json()) as { names: string[] };
+  return body.names;
+}
+
+export async function loadWorldConfig(name: string): Promise<WorldConfig> {
+  const res = await fetch(`/api/world-configs/${encodeURIComponent(name)}`);
+  if (!res.ok) {
+    throw new Error(await readApiError(res));
+  }
+  const body = (await res.json()) as {
+    name: string;
+    count: number;
+    density: number;
+    life: LifeBody;
+  };
+  return {
+    name: body.name,
+    count: body.count,
+    density: body.density,
+    life: lifeFromBody(body.life),
+  };
+}
+
+export async function saveWorldConfig(config: WorldConfig): Promise<WorldConfig> {
+  const res = await fetch(
+    `/api/world-configs/${encodeURIComponent(config.name)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: config.name,
+        count: config.count,
+        density: config.density,
+        life: lifeBody(config.life),
+      }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(await readApiError(res));
+  }
+  const body = (await res.json()) as {
+    name: string;
+    count: number;
+    density: number;
+    life: LifeBody;
+  };
+  return {
+    name: body.name,
+    count: body.count,
+    density: body.density,
+    life: lifeFromBody(body.life),
+  };
 }

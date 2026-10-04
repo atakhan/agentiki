@@ -26,7 +26,6 @@ class ResetIn(BaseModel):
     seed: int | None = None
 
 
-
 class LifeRulesIn(BaseModel):
     """Life costs and PD incomes. Defaults match the engine constants."""
 
@@ -39,6 +38,19 @@ class LifeRulesIn(BaseModel):
     temptation: int = Field(default=5, ge=0)
     punishment: int = Field(default=1, ge=0)
     sucker: int = Field(default=0, ge=0)
+
+
+class WorldConfigIn(BaseModel):
+    """Spawn settings for a named world. Not a running simulation."""
+
+    name: str = Field(min_length=1, max_length=80)
+    count: int = Field(default=100, ge=1, le=100_000)
+    density: int = Field(default=1, ge=1, le=10)
+    life: LifeRulesIn = Field(default_factory=LifeRulesIn)
+
+
+class WorldConfigListOut(BaseModel):
+    names: list[str]
 
 
 class StepIn(BaseModel):

@@ -10,14 +10,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from agentiki.sim import create_engine
+from agentiki.server.world_configs import (
+    list_world_configs,
+    load_world_config,
+    save_world_config,
+)
 from agentiki.server.schemas import (
-    LifeRulesIn,
     AgentOut,
     AgentsOut,
     CellOut,
     GenerateAgentsIn,
     InteractionOut,
+    LifeRulesIn,
     MeetingOut,
+    WorldConfigIn,
+    WorldConfigListOut,
     ObservationOut,
     PDRoundOut,
     ResetIn,
@@ -33,7 +40,6 @@ MAX_VIEWPORT_CELLS = 20_000
 
 def _engine(request: Request):
     return request.app.state.engine
-
 
 
 def _apply_life(engine, life: LifeRulesIn) -> None:
@@ -142,6 +148,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+
+@app.get("/api/world-configs", response_model=WorldConfigListOut)
+def world_config_list() -> WorldConfigListOut:
+    return WorldConfigListOut(names=list_world_configs())
+
+
+@app.get("/api/world-configs/{name}", response_model=WorldConfigIn)
+def world_config_get(name: str) -> WorldConfigIn:
+    try:
+        return load_world_config(name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Мир не найден") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/world-configs/{name}", response_model=WorldConfigIn)
+def world_config_put(name: str, body: WorldConfigIn) -> WorldConfigIn:
+    try:
+        return save_world_config(body.model_copy(update={"name": name}))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/health")
