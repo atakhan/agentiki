@@ -13,7 +13,8 @@ agentiki/
 │   ├── __init__.py
 │   ├── server/               # FastAPI control plane
 │   │   ├── main.py
-│   │   └── schemas.py
+│   │   ├── schemas.py
+│   │   └── world_configs.py  # JSON конфигов спавна
 │   └── sim/                  # Ядро симуляции
 │       ├── engine.py         # PythonEngine + create_engine
 │       ├── protocol.py       # SimulationEngine, Cell
@@ -33,6 +34,7 @@ agentiki/
 │       └── strategy/
 │           └── random_test.py
 ├── tests/                    # Набор unittest
+├── data/world_configs/       # JSON конфигов; каталог в .gitignore
 └── web/                      # React + Vite + Canvas UI
     ├── package.json
     └── src/
@@ -57,6 +59,9 @@ agentiki/
 | `test_interactions.py` | Контакты vs движение |
 | `test_meetings.py` | Встречи, PD, continue/leave |
 | `test_perception.py` | Радиусы зрения / interact, observe |
+| `test_hp.py` | Траты hp, смерть, нестандартные правила жизни |
+| `test_generation.py` | Равномерная решётка и шаг density |
+| `test_world_configs.py` | Сохранение JSON и отказ при неверном порядке притока |
 
 ## Отсутствует (важные отсутствия)
 

@@ -22,6 +22,9 @@ uv run python -m unittest discover -s tests -v
 | Interaction vs движение | `tests/test_interactions.py` | unittest + скриптовые стратегии |
 | Встречи / PD / continue | `tests/test_meetings.py` | unittest |
 | Восприятие / ограничения config | `tests/test_perception.py` | unittest |
+| Траты и смерть hp | `tests/test_hp.py` | unittest |
+| Решётка генерации | `tests/test_generation.py` | unittest |
+| JSON конфигов мира | `tests/test_world_configs.py` | unittest |
 
 ## Что не покрыто (текущий пробел)
 
@@ -34,8 +37,8 @@ uv run python -m unittest discover -s tests -v
 ## Ручной smoke-чеклист
 
 1. `GET /api/health` → `{"status":"ok"}`
-2. Сгенерировать 100 агентов в UI
-3. Step / play; убедиться, что tick растёт и агенты ходят или встречаются
+2. «Новый мир» → 100 агентов, плотность 1 → «Старт»
+3. Play; убедиться, что tick растёт и агенты ходят или встречаются
 4. Выбрать агента; появляется оверлей зрения
 5. `POST /api/world/reset` с seed; мир перезапускается пустым
 

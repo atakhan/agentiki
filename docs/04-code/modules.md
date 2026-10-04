@@ -55,7 +55,11 @@
 
 ## `agentiki.server.schemas`
 
-* Pydantic request/response модели API.
+* Pydantic request/response модели API, включая `LifeRulesIn` и `WorldConfigIn`.
+
+## `agentiki.server.world_configs`
+
+* Именованные конфиги спавна: `data/world_configs/<имя>.json`. Не снимок тика и агентов.
 
 ## Модули фронтенда (высокий уровень)
 
@@ -68,5 +72,8 @@
 | `web/src/world/interactionOverlay.ts` | Кратковременные визуалы interact/PD |
 | `web/src/world/agentAnimation.ts` | Плавные переходы агентов |
 | `web/src/components/WorldCanvas.tsx` | Ввод + rAF paint |
-| `web/src/components/TopBar.tsx` | Контролы |
-| `web/src/App.tsx` | Состояние приложения / play loop |
+| `web/src/components/HomeScreen.tsx` | Главная: новый / загрузить мир |
+| `web/src/components/ConfigScreen.tsx` | Конфиг популяции и жизни |
+| `web/src/components/LoadScreen.tsx` | Список сохранённых конфигов |
+| `web/src/components/TopBar.tsx` | Play/pause, «Рестарт», zoom, «Вид» |
+| `web/src/App.tsx` | Экраны, play loop, инспектор hp |

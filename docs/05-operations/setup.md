@@ -31,7 +31,7 @@ npm install
 | `AGENTIKI_SEED` | `1` | Окружение процесса (Compose задаёт) |
 | `AGENTIKI_SIM_BACKEND` | `python` | Окружение процесса |
 
-Радиусы симуляции и матрица выплат — defaults в коде (`SimulationConfig` / `PayoffMatrix`), через env сегодня не задаются.
+Радиусы симуляции — defaults в коде (`vision_radius=3`, `interaction_radius=1`). Правила жизни по умолчанию: старт 60, ход 2, стояние 1, решение 1, раунд 1; приток +3/+3, +1/+1, +0/+5. Через env они не задаются; UI пишет их в generate и step. Каталог конфигов — `AGENTIKI_CONFIG_DIR` или `data/world_configs`.
 
 ## Проверка установки
 
@@ -39,4 +39,4 @@ npm install
 uv run python -m unittest discover -s tests
 ```
 
-Ожидается: все тесты OK (на момент документации — 37).
+Ожидается: все тесты OK (прогон 2026-10-04: 51 tests, OK).
