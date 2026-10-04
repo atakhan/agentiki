@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import random
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Iterator
@@ -43,6 +42,7 @@ class Agent:
     @property
     def world_y(self) -> float:
         return self.cell_y + self.pos_y
+
 
 
 @dataclass
@@ -119,45 +119,35 @@ class AgentPopulation:
         origin_x: int = 0,
         origin_y: int = 0,
     ) -> list[Agent]:
+        """Place agents on a square lattice centered at the origin.
+
+        ``density`` is the spacing in cells to the nearest neighbor
+        (axis-aligned distance). Placement is uniform and deterministic;
+        ``seed`` is kept for API compatibility and does not affect positions.
+        """
+        del seed
         if count < 1:
             raise ValueError("count must be >= 1")
         if count > MAX_AGENTS:
             raise ValueError(f"count must be <= {MAX_AGENTS}")
-        density = max(0.01, min(density, 10.0))
+        spacing = max(1, min(10, int(round(density))))
 
         self.clear()
-        rng = random.Random(seed)
 
-        radius = max(1, math.ceil(math.sqrt(count / (math.pi * density))))
-        cells: list[tuple[int, int]] = []
-        while len(cells) < count:
-            cells = []
-            for dx in range(-radius, radius + 1):
-                for dy in range(-radius, radius + 1):
-                    if dx * dx + dy * dy <= radius * radius:
-                        cells.append((origin_x + dx, origin_y + dy))
-            if len(cells) < count:
-                radius += 1
-            else:
-                break
-
-        weights = [
-            math.exp(-math.hypot(cx - origin_x, cy - origin_y) * density)
-            for cx, cy in cells
-        ]
-
-        selected: list[tuple[int, int]] = []
-        pool = list(cells)
-        pool_weights = list(weights)
-        target = min(count, len(pool))
-        for _ in range(target):
-            idx = rng.choices(range(len(pool)), weights=pool_weights, k=1)[0]
-            selected.append(pool.pop(idx))
-            pool_weights.pop(idx)
+        cols = math.ceil(math.sqrt(count))
+        rows = math.ceil(count / cols)
+        x0 = origin_x - ((cols - 1) * spacing) // 2
+        y0 = origin_y - ((rows - 1) * spacing) // 2
 
         created: list[Agent] = []
-        for cell_x, cell_y in selected:
-            agent = Agent(id=self._next_id, cell_x=cell_x, cell_y=cell_y)
+        for index in range(count):
+            col = index % cols
+            row = index // cols
+            agent = Agent(
+                id=self._next_id,
+                cell_x=x0 + col * spacing,
+                cell_y=y0 + row * spacing,
+            )
             self._next_id += 1
             self._add(agent)
             created.append(agent)
