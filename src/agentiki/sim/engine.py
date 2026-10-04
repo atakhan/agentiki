@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
-
 from agentiki.sim.agents import Agent, AgentPopulation
 from agentiki.sim.config import SimulationConfig
 from agentiki.sim.interactions import Interaction
@@ -157,7 +156,9 @@ class PythonEngine:
             seed=gen_seed & 0xFFFFFFFF,
             origin_x=origin_x,
             origin_y=origin_y,
+            start_hp=self._config.start_hp,
         )
+
 
     def observe(self, agent_id: int) -> Observation:
         agent = self._agents.get(agent_id)

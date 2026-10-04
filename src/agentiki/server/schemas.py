@@ -36,7 +36,7 @@ class AgentOut(BaseModel):
     y: int
     pos_x: float = 0.5
     pos_y: float = 0.5
-    score: int = 0
+    hp: int = 60
     state: str = "FREE"
     meeting_id: int | None = None
 

@@ -220,8 +220,8 @@ export default function App() {
                   : ""}
               </div>
               <div className="opacity-70">
-                score{" "}
-                {agents.find((agent) => agent.id === selectedAgentId)?.score ??
+                hp{" "}
+                {agents.find((agent) => agent.id === selectedAgentId)?.hp ??
                   0}{" "}
                 · tick {tick} · PD {lastStepPdRounds} · видит{" "}
                 {visibleAgents.length} · зрение {visionRadius} · взаимодействие{" "}

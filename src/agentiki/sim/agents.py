@@ -10,6 +10,11 @@ from typing import Iterator
 from agentiki.sim.spatial_hash import SpatialHash
 
 MAX_AGENTS = 100_000
+START_HP = 60
+HP_MOVE = 2
+HP_STAY = 1
+HP_PLAY_DECISION = 1
+HP_GAME = 1
 
 
 class AgentState(Enum):
@@ -33,7 +38,7 @@ class Agent:
     genome: bytes | None = None
     state: AgentState = AgentState.FREE
     meeting_id: int | None = None
-    score: int = 0
+    hp: int = START_HP
 
     @property
     def world_x(self) -> float:
@@ -43,6 +48,9 @@ class Agent:
     def world_y(self) -> float:
         return self.cell_y + self.pos_y
 
+
+def spend_hp(agent: Agent, amount: int) -> None:
+    agent.hp = max(0, agent.hp - amount)
 
 
 @dataclass
@@ -111,6 +119,16 @@ class AgentPopulation:
             self._occupancy[(cell_x, cell_y)] = agent_id
             self.spatial.insert(agent_id, agent.world_x, agent.world_y)
 
+    def remove(self, agent_id: int) -> None:
+        """Drop an agent and rebuild occupancy. Used when hp reaches 0."""
+        agent = self._agents.pop(agent_id, None)
+        if agent is None:
+            return
+        self._occupancy.pop((agent.cell_x, agent.cell_y), None)
+        self.spatial.clear()
+        for remaining in self._agents.values():
+            self.spatial.insert(remaining.id, remaining.world_x, remaining.world_y)
+
     def generate(
         self,
         count: int,
@@ -118,6 +136,7 @@ class AgentPopulation:
         seed: int,
         origin_x: int = 0,
         origin_y: int = 0,
+        start_hp: int = START_HP,
     ) -> list[Agent]:
         """Place agents on a square lattice centered at the origin.
 
@@ -128,6 +147,8 @@ class AgentPopulation:
         del seed
         if count < 1:
             raise ValueError("count must be >= 1")
+        if start_hp < 1:
+            raise ValueError("start_hp must be >= 1")
         if count > MAX_AGENTS:
             raise ValueError(f"count must be <= {MAX_AGENTS}")
         spacing = max(1, min(10, int(round(density))))
@@ -147,6 +168,7 @@ class AgentPopulation:
                 id=self._next_id,
                 cell_x=x0 + col * spacing,
                 cell_y=y0 + row * spacing,
+                hp=start_hp,
             )
             self._next_id += 1
             self._add(agent)

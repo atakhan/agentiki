@@ -6,7 +6,7 @@ import random
 from typing import Protocol
 
 from agentiki.sim.actions import AgentAction, InteractAction, MoveAction, MoveDirection
-from agentiki.sim.agents import AgentPopulation, AgentState
+from agentiki.sim.agents import AgentPopulation, AgentState, spend_hp
 from agentiki.sim.config import SimulationConfig
 from agentiki.sim.interactions import resolve_interactions
 from agentiki.sim.results import StepResult
@@ -78,6 +78,13 @@ def step_tick(
     final = resolve_moves(population._occupancy, intents)
     population.apply_positions(final)
 
+    for agent in population.list():
+        start = agents[agent.id]
+        moved = (agent.cell_x, agent.cell_y) != start
+        spend_hp(agent, config.hp_move if moved else config.hp_stay)
+        if isinstance(actions.get(agent.id), InteractAction):
+            spend_hp(agent, config.hp_play_decision)
+
     continuing_outcomes = process_meeting_rounds(
         continuing_meetings,
         meeting_store,
@@ -102,6 +109,10 @@ def step_tick(
     pd_rounds: tuple[PDRoundResult, ...] = tuple(
         outcome.round_result for outcome in all_outcomes
     )
+
+    for agent_id in [agent.id for agent in population.list() if agent.hp <= 0]:
+        meeting_store.finish_for_agent(agent_id, population)
+        population.remove(agent_id)
 
     return StepResult(
         tick=tick,

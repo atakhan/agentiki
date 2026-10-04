@@ -41,7 +41,7 @@ def _agent_out(agent) -> AgentOut:
         y=agent.cell_y,
         pos_x=agent.pos_x,
         pos_y=agent.pos_y,
-        score=agent.score,
+        hp=agent.hp,
         state=agent.state.value,
         meeting_id=agent.meeting_id,
     )

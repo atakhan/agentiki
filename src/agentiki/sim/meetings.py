@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Protocol
 
-from agentiki.sim.agents import AgentState
+from agentiki.sim.agents import AgentState, spend_hp
 from agentiki.sim.interactions import Interaction
 from agentiki.sim.pd import PDRoundResult, PayoffMatrix, PDChoice
 
@@ -91,6 +91,19 @@ class MeetingStore:
     def busy_agents(self) -> set[int]:
         return set(self._agent_meeting)
 
+    def finish_for_agent(self, agent_id: int, population: AgentPopulation) -> None:
+        """End the meeting if this agent dies mid-encounter."""
+        meeting_id = self._agent_meeting.get(agent_id)
+        if meeting_id is None:
+            return
+        meeting = self._meetings.get(meeting_id)
+        if meeting is None:
+            self._agent_meeting.pop(agent_id, None)
+            return
+        if meeting.status is MeetingStatus.ACTIVE:
+            meeting.status = MeetingStatus.FINISHED
+        self._release_agents(meeting, population)
+
     def create_from_interaction(
         self,
         interaction: Interaction,
@@ -155,9 +168,11 @@ class MeetingStore:
             agent_a = population.get(meeting.agent_a_id)
             agent_b = population.get(meeting.agent_b_id)
             if agent_a is not None:
-                agent_a.score += payoff_a
+                agent_a.hp += payoff_a
+                spend_hp(agent_a, config.hp_game)
             if agent_b is not None:
-                agent_b.score += payoff_b
+                agent_b.hp += payoff_b
+                spend_hp(agent_b, config.hp_game)
 
             round_result = PDRoundResult(
                 meeting_id=meeting.meeting_id,
@@ -177,6 +192,10 @@ class MeetingStore:
             continue_b = strategy.choose_continue(
                 meeting, meeting.agent_b_id, round_result, config, rng
             )
+            if agent_a is not None:
+                spend_hp(agent_a, config.hp_play_decision)
+            if agent_b is not None:
+                spend_hp(agent_b, config.hp_play_decision)
 
             meeting_finished = not (
                 continue_a is ContinueChoice.CONTINUE
