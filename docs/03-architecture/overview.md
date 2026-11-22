@@ -20,7 +20,7 @@ flowchart TB
 | --- | --- |
 | UI (`web/`) | Камера, отрисовка, контролы, вызовы API |
 | Server (`src/agentiki/server/`) | HTTP-схемы, CORS, раздача статики UI, lifecycle движка |
-| Sim core (`src/agentiki/sim/`) | Мир, агенты, тик, восприятие, движение, взаимодействия, встречи, PD |
+| Sim core (`src/agentiki/sim/`) | Мир W×H, агенты, еда, тик, восприятие, движение, взаимодействия, встречи, PD |
 
 ## Границы дизайна
 
@@ -46,9 +46,9 @@ Multi-stage образ собирает web, затем отдаёт `web/dist` 
 | --- | --- |
 | `AGENTIKI_SEED` | Начальный seed мира при старте процесса |
 | `AGENTIKI_SIM_BACKEND` | `python` (по умолчанию) или `rust` |
-| Defaults `SimulationConfig` | Радиусы, правила жизни (hp и матрица PD) |
-| API `reset` / `generate` / `step` | Управление миром в runtime |
-| Контролы UI | Главная («Новый мир» / «Загрузить мир»), экран конфига, на симуляции play/pause, «Рестарт», zoom, «Вид», назад, инспектор |
+| Defaults `SimulationConfig` | Радиусы, map W×H, food_*, `enable_pd`, правила жизни (hp и матрица PD) |
+| API `reset` / `generate` / `step` / `food` | Управление миром в runtime |
+| Контролы UI | Главная («Новый мир» / «Загрузить мир»), экран конфига (карта/еда/жизнь), на симуляции play/pause, «Рестарт», zoom, «Вид», назад, инспектор |
 
 ## Что намеренно отложено
 

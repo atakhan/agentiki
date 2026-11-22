@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import {
   DEFAULT_AGENT_COUNT,
   DEFAULT_AGENT_DENSITY,
+  DEFAULT_FOOD_CAPACITY,
+  DEFAULT_FOOD_DENSITY_RADIUS,
+  DEFAULT_FOOD_ENERGY,
   DEFAULT_LIFE_RULES,
+  DEFAULT_MAP_HEIGHT,
+  DEFAULT_MAP_WIDTH,
   saveWorldConfig,
   type LifeRules,
   type WorldConfig,
@@ -12,12 +17,19 @@ const MIN_AGENT_COUNT = 1;
 const MAX_AGENT_COUNT = 100_000;
 const MIN_AGENT_DENSITY = 1;
 const MAX_AGENT_DENSITY = 10;
+const MIN_MAP_SIZE = 1;
+const MAX_MAP_SIZE = 10_000;
 const INCOME_ORDER_ERROR = "Приток: предатель > оба C > оба D > кооператор";
 
 export const EMPTY_WORLD_CONFIG: WorldConfig = {
   name: "",
   count: DEFAULT_AGENT_COUNT,
   density: DEFAULT_AGENT_DENSITY,
+  mapWidth: DEFAULT_MAP_WIDTH,
+  mapHeight: DEFAULT_MAP_HEIGHT,
+  foodCapacity: DEFAULT_FOOD_CAPACITY,
+  foodDensityRadius: DEFAULT_FOOD_DENSITY_RADIUS,
+  foodEnergy: DEFAULT_FOOD_ENERGY,
   life: DEFAULT_LIFE_RULES,
 };
 
@@ -105,6 +117,13 @@ export default function ConfigScreen({
   const [count, setCount] = useState(initial.count);
   const [countDraft, setCountDraft] = useState(String(initial.count));
   const [density, setDensity] = useState(initial.density);
+  const [mapWidth, setMapWidth] = useState(initial.mapWidth);
+  const [mapHeight, setMapHeight] = useState(initial.mapHeight);
+  const [foodCapacity, setFoodCapacity] = useState(initial.foodCapacity);
+  const [foodDensityRadius, setFoodDensityRadius] = useState(
+    initial.foodDensityRadius,
+  );
+  const [foodEnergy, setFoodEnergy] = useState(initial.foodEnergy);
   const [life, setLife] = useState<LifeRules>(initial.life);
   const [lifeError, setLifeError] = useState<string | null>(null);
   const [knownName, setKnownName] = useState(initial.name);
@@ -118,6 +137,11 @@ export default function ConfigScreen({
     setCount(initial.count);
     setCountDraft(String(initial.count));
     setDensity(initial.density);
+    setMapWidth(initial.mapWidth);
+    setMapHeight(initial.mapHeight);
+    setFoodCapacity(initial.foodCapacity);
+    setFoodDensityRadius(initial.foodDensityRadius);
+    setFoodEnergy(initial.foodEnergy);
     setLife(initial.life);
     setKnownName(initial.name);
     setNameDraft(initial.name);
@@ -128,6 +152,10 @@ export default function ConfigScreen({
 
   const commitLife = (key: keyof LifeRules, value: number) => {
     const next = { ...life, [key]: value };
+    if (next.startHpMax < next.startHpMin) {
+      setLifeError("Жизнь: «до» должна быть ≥ «от»");
+      return false;
+    }
     if (!incomesOrdered(next)) {
       setLifeError(INCOME_ORDER_ERROR);
       return false;
@@ -155,6 +183,11 @@ export default function ConfigScreen({
     name: knownName,
     count,
     density,
+    mapWidth,
+    mapHeight,
+    foodCapacity,
+    foodDensityRadius,
+    foodEnergy,
     life,
   });
 
@@ -219,6 +252,63 @@ export default function ConfigScreen({
             />
           </label>
 
+          <div className="grid gap-3 sm:grid-cols-2">
+            <RuleField
+              label="Ширина карты"
+              value={mapWidth}
+              min={MIN_MAP_SIZE}
+              onCommit={(value) => {
+                if (value > MAX_MAP_SIZE) {
+                  return false;
+                }
+                setMapWidth(value);
+                return true;
+              }}
+            />
+            <RuleField
+              label="Высота карты"
+              value={mapHeight}
+              min={MIN_MAP_SIZE}
+              onCommit={(value) => {
+                if (value > MAX_MAP_SIZE) {
+                  return false;
+                }
+                setMapHeight(value);
+                return true;
+              }}
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <RuleField
+              label="Еда на карте"
+              value={foodCapacity}
+              min={0}
+              onCommit={(value) => {
+                setFoodCapacity(value);
+                return true;
+              }}
+            />
+            <RuleField
+              label="Радиус плотности еды"
+              value={foodDensityRadius}
+              min={0}
+              onCommit={(value) => {
+                setFoodDensityRadius(value);
+                return true;
+              }}
+            />
+            <RuleField
+              label="Энергия еды"
+              value={foodEnergy}
+              min={0}
+              onCommit={(value) => {
+                setFoodEnergy(value);
+                return true;
+              }}
+            />
+          </div>
+
           <div>
             <div className="mb-1 flex items-center justify-between text-xs">
               <span className="label p-0">Плотность</span>
@@ -237,13 +327,37 @@ export default function ConfigScreen({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <p className="text-xs opacity-60 sm:col-span-2">Конфиги жизни · траты</p>
-            <RuleField label="Старт" min={1} value={life.startHp} onCommit={(value) => commitLife("startHp", value)} />
+            <p className="text-xs opacity-60 sm:col-span-2">Жизнь (не пополняется)</p>
+            <RuleField
+              label="Жизнь от"
+              min={1}
+              value={life.startHpMin}
+              onCommit={(value) => commitLife("startHpMin", value)}
+            />
+            <RuleField
+              label="Жизнь до"
+              min={1}
+              value={life.startHpMax}
+              onCommit={(value) => commitLife("startHpMax", value)}
+            />
+            <RuleField
+              label="Жизнь / тик"
+              min={0}
+              value={life.hpTick}
+              onCommit={(value) => commitLife("hpTick", value)}
+            />
+            <RuleField
+              label="Старт энергии"
+              min={0}
+              value={life.startEnergy}
+              onCommit={(value) => commitLife("startEnergy", value)}
+            />
+            <p className="text-xs opacity-60 sm:col-span-2">Траты энергии</p>
             <RuleField label="Ход" min={0} value={life.moveCost} onCommit={(value) => commitLife("moveCost", value)} />
             <RuleField label="Стояние" min={0} value={life.stayCost} onCommit={(value) => commitLife("stayCost", value)} />
             <RuleField label="Решение" min={0} value={life.decisionCost} onCommit={(value) => commitLife("decisionCost", value)} />
             <RuleField label="Раунд" min={0} value={life.roundCost} onCommit={(value) => commitLife("roundCost", value)} />
-            <p className="text-xs opacity-60 sm:col-span-2">Приток</p>
+            <p className="text-xs opacity-60 sm:col-span-2">Приток энергии (PD)</p>
             <RuleField label="Оба сотрудничают" min={0} value={life.bothCooperate} onCommit={(value) => commitLife("bothCooperate", value)} />
             <RuleField label="Оба предают" min={0} value={life.bothDefect} onCommit={(value) => commitLife("bothDefect", value)} />
             <RuleField label="Предатель" min={0} value={life.defector} onCommit={(value) => commitLife("defector", value)} />

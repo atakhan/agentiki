@@ -6,6 +6,7 @@ import TopBar from "./components/TopBar";
 import WorldCanvas from "./components/WorldCanvas";
 import {
   DEFAULT_LIFE_RULES,
+  fetchFood,
   fetchObservation,
   fetchWorld,
   generateAgents,
@@ -13,6 +14,7 @@ import {
   loadWorldConfig,
   resetWorld,
   stepWorld,
+  type FoodItem,
   type LifeRules,
   type WorldConfig,
 } from "./api";
@@ -26,18 +28,28 @@ import {
 } from "./world/camera";
 import { InteractionOverlay } from "./world/interactionOverlay";
 
-const ORIGIN_CAMERA: Camera = { x: 0, y: 0, zoom: 1 };
 const PLAY_INTERVAL_MS = 1000;
+
+function mapCenterCamera(mapWidth: number, mapHeight: number): Camera {
+  return {
+    x: (mapWidth - 1) / 2,
+    y: (mapHeight - 1) / 2,
+    zoom: 1,
+  };
+}
 
 type Screen = "home" | "load" | "config" | "sim";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
-  const [camera, setCamera] = useState<Camera>(ORIGIN_CAMERA);
+  const [camera, setCamera] = useState<Camera>(() => mapCenterCamera(64, 64));
+  const [mapWidth, setMapWidth] = useState(64);
+  const [mapHeight, setMapHeight] = useState(64);
   const [cellPx, setCellPx] = useState(DEFAULT_CELL_PX);
   const [backend, setBackend] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [food, setFood] = useState<FoodItem[]>([]);
   const [lifeRules, setLifeRules] = useState<LifeRules>(DEFAULT_LIFE_RULES);
   const sessionConfigRef = useRef<WorldConfig | null>(null);
   const [configDraft, setConfigDraft] = useState<WorldConfig>(EMPTY_WORLD_CONFIG);
@@ -112,6 +124,7 @@ export default function App() {
       const result = await stepWorld(n, lifeRules);
       setTick(result.world.tick);
       setAgents(result.agents.agents);
+      setFood(result.food.food);
       setLastStepPdRounds(result.pd_rounds.length);
       interactionOverlayRef.current.add(result.interactions);
       interactionOverlayRef.current.addPdRounds(result.pd_rounds);
@@ -192,18 +205,24 @@ export default function App() {
     setSelectedAgentId(null);
     try {
       const world = await resetWorld();
-      const result = await generateAgents(config.count, config.density, config.life);
+      const result = await generateAgents(config);
+      const foodState = await fetchFood();
       setBackend(world.backend);
       setTick(0);
       setAgents(result.agents);
+      setFood(foodState.food);
       setLifeRules(config.life);
+      setMapWidth(config.mapWidth);
+      setMapHeight(config.mapHeight);
       sessionConfigRef.current = config;
       setLastStepPdRounds(0);
       interactionOverlayRef.current = new InteractionOverlay();
-      setCamera(ORIGIN_CAMERA);
+      setCamera(mapCenterCamera(config.mapWidth, config.mapHeight));
       setScreen("sim");
       const after = await fetchWorld();
       setTick(after.tick);
+      setMapWidth(after.map_width);
+      setMapHeight(after.map_height);
     } catch (error) {
       setStartError(error instanceof Error ? error.message : "Не удалось запустить мир");
     } finally {
@@ -227,14 +246,21 @@ export default function App() {
     setSelectedAgentId(null);
     try {
       await resetWorld();
-      const result = await generateAgents(config.count, config.density, config.life);
+      const result = await generateAgents(config);
+      const foodState = await fetchFood();
       setAgents(result.agents);
+      setFood(foodState.food);
       setLifeRules(config.life);
+      setMapWidth(config.mapWidth);
+      setMapHeight(config.mapHeight);
       setLastStepPdRounds(0);
       interactionOverlayRef.current = new InteractionOverlay();
       setInteractionPulse((value) => value + 1);
+      setCamera(mapCenterCamera(config.mapWidth, config.mapHeight));
       const after = await fetchWorld();
       setTick(after.tick);
+      setMapWidth(after.map_width);
+      setMapHeight(after.map_height);
     } catch (error) {
       console.error(error);
     } finally {
@@ -299,7 +325,7 @@ export default function App() {
         onTogglePlay={() => setPlaying((current) => !current)}
         onRestart={() => void handleRestart()}
         onResetView={() => {
-          setCamera(ORIGIN_CAMERA);
+          setCamera(mapCenterCamera(mapWidth, mapHeight));
           setHoverCell(null);
         }}
         onBack={goHome}
@@ -308,7 +334,10 @@ export default function App() {
         <WorldCanvas
           camera={camera}
           cellPx={cellPx}
+          mapWidth={mapWidth}
+          mapHeight={mapHeight}
           agents={agents}
+          food={food}
           selectedAgentId={selectedAgentId}
           visionRadius={visionRadius}
           interactionRadius={interactionRadius}
@@ -332,6 +361,11 @@ export default function App() {
               <div className="opacity-70">
                 жизнь{" "}
                 {agents.find((agent) => agent.id === selectedAgentId)?.hp ?? 0}{" "}
+                · энергия{" "}
+                {(
+                  agents.find((agent) => agent.id === selectedAgentId)?.energy ??
+                  0
+                ).toFixed(2)}{" "}
                 · tick {tick} · PD {lastStepPdRounds} · видит{" "}
                 {visibleAgents.length} · зрение {visionRadius} · взаимодействие{" "}
                 {interactionRadius}

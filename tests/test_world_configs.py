@@ -20,11 +20,14 @@ def _config(name: str, count: int = 12, temptation: int = 9) -> WorldConfigIn:
         count=count,
         density=3,
         life=LifeRulesIn(
-            start_hp=40,
-            hp_move=4,
-            hp_stay=0,
-            hp_play_decision=2,
-            hp_game=1,
+            start_hp_min=40,
+            start_hp_max=40,
+            hp_tick=1,
+            start_energy=100.0,
+            energy_move=4,
+            energy_stay=0,
+            energy_play_decision=2,
+            energy_game=1,
             reward=4,
             temptation=temptation,
             punishment=2,
@@ -46,8 +49,8 @@ class WorldConfigStoreTests(unittest.TestCase):
             self.assertEqual(loaded.name, "Альфа")
             self.assertEqual(loaded.count, 15)
             self.assertEqual(loaded.density, 3)
-            self.assertEqual(loaded.life.start_hp, 40)
-            self.assertEqual(loaded.life.hp_move, 4)
+            self.assertEqual(loaded.life.start_hp_min, 40)
+            self.assertEqual(loaded.life.energy_move, 4)
             self.assertEqual(loaded.life.temptation, 9)
             self.assertEqual(loaded.life.reward, 4)
             self.assertTrue((root / "Альфа.json").is_file())

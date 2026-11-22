@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Protocol
 
-from agentiki.sim.agents import AgentState, spend_hp
+from agentiki.sim.agents import AgentState, gain_energy, spend_energy
 from agentiki.sim.interactions import Interaction
 from agentiki.sim.pd import PDRoundResult, PayoffMatrix, PDChoice
 
@@ -168,11 +168,11 @@ class MeetingStore:
             agent_a = population.get(meeting.agent_a_id)
             agent_b = population.get(meeting.agent_b_id)
             if agent_a is not None:
-                agent_a.hp += payoff_a
-                spend_hp(agent_a, config.hp_game)
+                gain_energy(agent_a, payoff_a)
+                spend_energy(agent_a, config.energy_game)
             if agent_b is not None:
-                agent_b.hp += payoff_b
-                spend_hp(agent_b, config.hp_game)
+                gain_energy(agent_b, payoff_b)
+                spend_energy(agent_b, config.energy_game)
 
             round_result = PDRoundResult(
                 meeting_id=meeting.meeting_id,
@@ -193,9 +193,9 @@ class MeetingStore:
                 meeting, meeting.agent_b_id, round_result, config, rng
             )
             if agent_a is not None:
-                spend_hp(agent_a, config.hp_play_decision)
+                spend_energy(agent_a, config.energy_play_decision)
             if agent_b is not None:
-                spend_hp(agent_b, config.hp_play_decision)
+                spend_energy(agent_b, config.energy_play_decision)
 
             meeting_finished = not (
                 continue_a is ContinueChoice.CONTINUE

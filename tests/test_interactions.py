@@ -35,7 +35,9 @@ class FixedStrategy:
 
 class InteractionTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.config = SimulationConfig(vision_radius=3, interaction_radius=1)
+        self.config = SimulationConfig(
+            vision_radius=3, interaction_radius=1, enable_pd=True
+        )
         self.store = MeetingStore()
 
     def test_simple_contact(self) -> None:

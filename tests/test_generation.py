@@ -46,6 +46,47 @@ class GenerationTests(unittest.TestCase):
         self.assertEqual(xs, [8, 10, 12])
         self.assertEqual(ys, [-6, -4, -2])
 
+    def test_fits_inside_map(self) -> None:
+        pop = AgentPopulation()
+        agents = pop.generate(
+            count=9,
+            density=1,
+            seed=0,
+            origin_x=4,
+            origin_y=4,
+            map_width=10,
+            map_height=10,
+        )
+        for agent in agents:
+            self.assertGreaterEqual(agent.cell_x, 0)
+            self.assertLess(agent.cell_x, 10)
+            self.assertGreaterEqual(agent.cell_y, 0)
+            self.assertLess(agent.cell_y, 10)
+
+    def test_rejects_when_count_exceeds_area(self) -> None:
+        pop = AgentPopulation()
+        with self.assertRaises(ValueError):
+            pop.generate(
+                count=5,
+                density=1,
+                seed=0,
+                map_width=2,
+                map_height=2,
+            )
+
+    def test_rejects_when_lattice_spills_past_edge(self) -> None:
+        pop = AgentPopulation()
+        with self.assertRaises(ValueError):
+            pop.generate(
+                count=9,
+                density=3,
+                seed=0,
+                origin_x=1,
+                origin_y=1,
+                map_width=5,
+                map_height=5,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

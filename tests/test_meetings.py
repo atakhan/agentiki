@@ -54,7 +54,9 @@ class PayoffMatrixTests(unittest.TestCase):
 
 class MeetingTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.config = SimulationConfig(vision_radius=3, interaction_radius=1)
+        self.config = SimulationConfig(
+            vision_radius=3, interaction_radius=1, enable_pd=True
+        )
         self.store = MeetingStore()
 
     def test_interaction_creates_meeting(self) -> None:
@@ -83,7 +85,7 @@ class MeetingTests(unittest.TestCase):
         self.assertEqual(pop.get(1).state, AgentState.FREE)
         self.assertEqual(pop.get(2).state, AgentState.FREE)
 
-    def test_payoffs_update_hp(self) -> None:
+    def test_payoffs_update_energy(self) -> None:
         pop = _pop_with_agents((1, (0, 0)), (2, (1, 0)))
         step_tick(
             pop,
@@ -100,22 +102,24 @@ class MeetingTests(unittest.TestCase):
             rng=random.Random(0),
             meeting_store=self.store,
         )
-        # Initiator: stay 1 + interact 1 + game 1 + leave 1, payoff 0.
-        # Partner: stay 1 + game 1 + leave 1, payoff 5. No hp cap.
-        self.assertEqual(pop.get(1).hp, START_HP - 4)
-        self.assertEqual(pop.get(2).hp, START_HP + 2)
+        # Default start energy 100. Initiator: −4 +0; partner: −3 +5.
+        self.assertEqual(pop.get(1).hp, START_HP - 1)
+        self.assertEqual(pop.get(2).hp, START_HP - 1)
+        self.assertEqual(pop.get(1).energy, 96.0)
+        self.assertEqual(pop.get(2).energy, 102.0)
         self.assertFalse(hasattr(pop.get(1), "score"))
 
     def test_played_rounds_award_matrix_and_accumulate(self) -> None:
-        # One-sided meeting, both leave. Initiator pays stay+interact+game+leave.
-        # Partner pays stay+game+leave. Payoff is added on top of those costs.
+        # Energy starts at 10 so costs are visible without floor clamping.
         cases = (
-            (PDChoice.COOPERATE, PDChoice.COOPERATE, -4 + 3, -3 + 3),
-            (PDChoice.DEFECT, PDChoice.DEFECT, -4 + 1, -3 + 1),
-            (PDChoice.COOPERATE, PDChoice.DEFECT, -4 + 0, -3 + 5),
+            (PDChoice.COOPERATE, PDChoice.COOPERATE, 10 - 4 + 3, 10 - 3 + 3),
+            (PDChoice.DEFECT, PDChoice.DEFECT, 10 - 4 + 1, 10 - 3 + 1),
+            (PDChoice.COOPERATE, PDChoice.DEFECT, 10 - 4 + 0, 10 - 3 + 5),
         )
-        for choice_a, choice_b, delta_a, delta_b in cases:
+        for choice_a, choice_b, energy_a, energy_b in cases:
             pop = _pop_with_agents((1, (0, 0)), (2, (1, 0)))
+            pop.get(1).energy = 10.0
+            pop.get(2).energy = 10.0
             step_tick(
                 pop,
                 self.config,
@@ -131,10 +135,14 @@ class MeetingTests(unittest.TestCase):
                 rng=random.Random(0),
                 meeting_store=MeetingStore(),
             )
-            self.assertEqual(pop.get(1).hp, START_HP + delta_a)
-            self.assertEqual(pop.get(2).hp, START_HP + delta_b)
+            self.assertEqual(pop.get(1).hp, START_HP - 1)
+            self.assertEqual(pop.get(2).hp, START_HP - 1)
+            self.assertEqual(pop.get(1).energy, float(energy_a))
+            self.assertEqual(pop.get(2).energy, float(energy_b))
 
         pop = _pop_with_agents((1, (0, 0)), (2, (1, 0)))
+        pop.get(1).energy = 10.0
+        pop.get(2).energy = 10.0
         store = MeetingStore()
         step_tick(
             pop,
@@ -154,9 +162,10 @@ class MeetingTests(unittest.TestCase):
             rng=random.Random(0),
             meeting_store=store,
         )
-        # Mutual cooperate: stay+interact+game+continue, payoff +3 → -1 each.
+        # Mutual cooperate: stay+interact+game+continue, payoff +3 → energy 9.
         self.assertEqual(pop.get(1).hp, START_HP - 1)
-        self.assertEqual(pop.get(2).hp, START_HP - 1)
+        self.assertEqual(pop.get(1).energy, 9.0)
+        self.assertEqual(pop.get(2).energy, 9.0)
         step_tick(
             pop,
             self.config,
@@ -168,11 +177,14 @@ class MeetingTests(unittest.TestCase):
             rng=random.Random(0),
             meeting_store=store,
         )
-        # Still in the meeting: stay+game+leave, payoff +1 → another -2. Total -3.
-        self.assertEqual(pop.get(1).hp, START_HP - 3)
-        self.assertEqual(pop.get(2).hp, START_HP - 3)
+        # Meeting tick: stay+game+leave, payoff +1 → energy 9-3+1=7. Life −2 total.
+        self.assertEqual(pop.get(1).hp, START_HP - 2)
+        self.assertEqual(pop.get(1).energy, 7.0)
+        self.assertEqual(pop.get(2).energy, 7.0)
 
         far = _pop_with_agents((1, (0, 0)), (2, (5, 0)))
+        far.get(1).energy = 10.0
+        far.get(2).energy = 10.0
         step_tick(
             far,
             self.config,
@@ -186,9 +198,10 @@ class MeetingTests(unittest.TestCase):
             rng=random.Random(0),
             meeting_store=MeetingStore(),
         )
-        # Out of range: decision never plays a round, so no PD gain.
-        self.assertEqual(far.get(1).hp, START_HP - 2)
-        self.assertEqual(far.get(2).hp, START_HP - 1)
+        # Out of range: stay+interact decision, no PD.
+        self.assertEqual(far.get(1).hp, START_HP - 1)
+        self.assertEqual(far.get(1).energy, 8.0)
+        self.assertEqual(far.get(2).energy, 9.0)
 
     def test_both_continue_plays_next_round(self) -> None:
         pop = _pop_with_agents((1, (0, 0)), (2, (1, 0)))

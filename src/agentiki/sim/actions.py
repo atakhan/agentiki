@@ -33,4 +33,11 @@ class InteractAction:
     target_agent_id: int
 
 
-AgentAction = MoveAction | InteractAction
+@dataclass(frozen=True, slots=True)
+class EatAction:
+    """Spend this tick eating a reachable food item (no movement)."""
+
+    food_id: int
+
+
+AgentAction = MoveAction | InteractAction | EatAction

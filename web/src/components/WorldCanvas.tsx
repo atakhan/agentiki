@@ -9,6 +9,7 @@ import type { VisibleAgentObs } from "../types/observation";
 import { AgentAnimationController } from "../world/agentAnimation";
 import { InteractionOverlay } from "../world/interactionOverlay";
 import { renderAgents } from "../world/renderAgents";
+import { renderFood, type FoodItem } from "../world/renderFood";
 import { renderGrid } from "../world/renderGrid";
 import { renderInteractions } from "../world/renderInteractions";
 import { renderVisionDebug } from "../world/renderVisionDebug";
@@ -16,7 +17,10 @@ import { renderVisionDebug } from "../world/renderVisionDebug";
 type WorldCanvasProps = {
   camera: Camera;
   cellPx: number;
+  mapWidth: number;
+  mapHeight: number;
   agents: readonly Agent[];
+  food: readonly FoodItem[];
   selectedAgentId: number | null;
   visionRadius: number;
   interactionRadius: number;
@@ -33,7 +37,10 @@ const DRAG_THRESHOLD_PX = 5;
 export default function WorldCanvas({
   camera,
   cellPx,
+  mapWidth,
+  mapHeight,
   agents,
+  food,
   selectedAgentId,
   visionRadius,
   interactionRadius,
@@ -47,7 +54,10 @@ export default function WorldCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cameraRef = useRef(camera);
   const cellPxRef = useRef(cellPx);
+  const mapWidthRef = useRef(mapWidth);
+  const mapHeightRef = useRef(mapHeight);
   const agentsRef = useRef(agents);
+  const foodRef = useRef(food);
   const selectedAgentIdRef = useRef(selectedAgentId);
   const visionRadiusRef = useRef(visionRadius);
   const interactionRadiusRef = useRef(interactionRadius);
@@ -69,7 +79,10 @@ export default function WorldCanvas({
 
   cameraRef.current = camera;
   cellPxRef.current = cellPx;
+  mapWidthRef.current = mapWidth;
+  mapHeightRef.current = mapHeight;
   agentsRef.current = agents;
+  foodRef.current = food;
   selectedAgentIdRef.current = selectedAgentId;
   visionRadiusRef.current = visionRadius;
   interactionRadiusRef.current = interactionRadius;
@@ -110,6 +123,16 @@ export default function WorldCanvas({
       height,
       camera: cameraRef.current,
       cellPx: cellPxRef.current,
+      mapWidth: mapWidthRef.current,
+      mapHeight: mapHeightRef.current,
+    });
+
+    renderFood(ctx, {
+      width,
+      height,
+      camera: cameraRef.current,
+      cellPx: cellPxRef.current,
+      food: foodRef.current,
     });
 
     const visuals = animRef.current.getVisuals(
@@ -194,7 +217,7 @@ export default function WorldCanvas({
     ) {
       startAnimationLoop();
     }
-  }, [agents, paint, startAnimationLoop, interactionPulse]);
+  }, [agents, food, paint, startAnimationLoop, interactionPulse]);
 
   useEffect(() => {
     paint();
@@ -202,6 +225,9 @@ export default function WorldCanvas({
     paint,
     camera,
     cellPx,
+    mapWidth,
+    mapHeight,
+    food,
     selectedAgentId,
     visibleAgents,
     visionRadius,

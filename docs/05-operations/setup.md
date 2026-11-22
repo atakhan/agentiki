@@ -31,7 +31,7 @@ npm install
 | `AGENTIKI_SEED` | `1` | Окружение процесса (Compose задаёт) |
 | `AGENTIKI_SIM_BACKEND` | `python` | Окружение процесса |
 
-Радиусы симуляции — defaults в коде (`vision_radius=3`, `interaction_radius=1`). Правила жизни по умолчанию: старт 60, ход 2, стояние 1, решение 1, раунд 1; приток +3/+3, +1/+1, +0/+5. Через env они не задаются; UI пишет их в generate и step. Каталог конфигов — `AGENTIKI_CONFIG_DIR` или `data/world_configs`.
+Радиусы симуляции — defaults в коде (`vision_radius=3`, `interaction_radius=1`). Правила жизни/energy задаются в UI и уходят в generate/step. Каталог конфигов — `AGENTIKI_CONFIG_DIR` или `data/world_configs`. В Docker Compose каталог смонтирован как volume `./data/world_configs:/data/world_configs`, чтобы JSON переживали rebuild.
 
 ## Проверка установки
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from agentiki.sim.food import Food, FoodConsumption
 from agentiki.sim.interactions import Interaction
 from agentiki.sim.meetings import Meeting, MeetingRoundOutcome
 from agentiki.sim.pd import PDRoundResult
@@ -16,3 +17,5 @@ class StepResult:
     meetings_started: tuple[Meeting, ...] = ()
     pd_rounds: tuple[PDRoundResult, ...] = ()
     meeting_outcomes: tuple[MeetingRoundOutcome, ...] = ()
+    food_consumed: tuple[FoodConsumption, ...] = ()
+    food_spawned: tuple[Food, ...] = ()

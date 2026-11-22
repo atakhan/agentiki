@@ -4,7 +4,10 @@ import type { PDRoundEvent } from "./types/pd";
 import type { ObservationResponse } from "./types/observation";
 
 export type LifeRules = {
-  startHp: number;
+  startHpMin: number;
+  startHpMax: number;
+  hpTick: number;
+  startEnergy: number;
   moveCost: number;
   stayCost: number;
   decisionCost: number;
@@ -16,7 +19,10 @@ export type LifeRules = {
 };
 
 export const DEFAULT_LIFE_RULES: LifeRules = {
-  startHp: 60,
+  startHpMin: 40,
+  startHpMax: 80,
+  hpTick: 1,
+  startEnergy: 100,
   moveCost: 2,
   stayCost: 1,
   decisionCost: 1,
@@ -29,20 +35,45 @@ export const DEFAULT_LIFE_RULES: LifeRules = {
 
 export const DEFAULT_AGENT_COUNT = 100;
 export const DEFAULT_AGENT_DENSITY = 1;
+export const DEFAULT_MAP_WIDTH = 64;
+export const DEFAULT_MAP_HEIGHT = 64;
+export const DEFAULT_FOOD_CAPACITY = 50;
+export const DEFAULT_FOOD_DENSITY_RADIUS = 3;
+export const DEFAULT_FOOD_ENERGY = 10;
 
 export type WorldConfig = {
   name: string;
   count: number;
   density: number;
+  mapWidth: number;
+  mapHeight: number;
+  foodCapacity: number;
+  foodDensityRadius: number;
+  foodEnergy: number;
   life: LifeRules;
 };
 
+export type FoodItem = {
+  id: number;
+  x: number;
+  y: number;
+  energy: number;
+};
+
+export type FoodResponse = {
+  count: number;
+  food: FoodItem[];
+};
+
 type LifeBody = {
-  start_hp: number;
-  hp_move: number;
-  hp_stay: number;
-  hp_play_decision: number;
-  hp_game: number;
+  start_hp_min: number;
+  start_hp_max: number;
+  hp_tick: number;
+  start_energy: number;
+  energy_move: number;
+  energy_stay: number;
+  energy_play_decision: number;
+  energy_game: number;
   reward: number;
   punishment: number;
   temptation: number;
@@ -51,11 +82,14 @@ type LifeBody = {
 
 function lifeBody(life: LifeRules): LifeBody {
   return {
-    start_hp: life.startHp,
-    hp_move: life.moveCost,
-    hp_stay: life.stayCost,
-    hp_play_decision: life.decisionCost,
-    hp_game: life.roundCost,
+    start_hp_min: life.startHpMin,
+    start_hp_max: life.startHpMax,
+    hp_tick: life.hpTick,
+    start_energy: life.startEnergy,
+    energy_move: life.moveCost,
+    energy_stay: life.stayCost,
+    energy_play_decision: life.decisionCost,
+    energy_game: life.roundCost,
     reward: life.bothCooperate,
     punishment: life.bothDefect,
     temptation: life.defector,
@@ -65,11 +99,14 @@ function lifeBody(life: LifeRules): LifeBody {
 
 function lifeFromBody(raw: LifeBody): LifeRules {
   return {
-    startHp: raw.start_hp,
-    moveCost: raw.hp_move,
-    stayCost: raw.hp_stay,
-    decisionCost: raw.hp_play_decision,
-    roundCost: raw.hp_game,
+    startHpMin: raw.start_hp_min,
+    startHpMax: raw.start_hp_max,
+    hpTick: raw.hp_tick,
+    startEnergy: raw.start_energy,
+    moveCost: raw.energy_move,
+    stayCost: raw.energy_stay,
+    decisionCost: raw.energy_play_decision,
+    roundCost: raw.energy_game,
     bothCooperate: raw.reward,
     bothDefect: raw.punishment,
     defector: raw.temptation,
@@ -99,6 +136,12 @@ export type WorldInfo = {
   agent_count: number;
   vision_radius: number;
   interaction_radius: number;
+  map_width: number;
+  map_height: number;
+  food_count: number;
+  food_capacity: number;
+  food_density_radius: number;
+  food_energy: number;
 };
 
 export async function fetchWorld(): Promise<WorldInfo> {
@@ -120,6 +163,7 @@ export async function fetchAgents(): Promise<AgentsResponse> {
 export type StepResponse = {
   world: WorldInfo;
   agents: AgentsResponse;
+  food: FoodResponse;
   interactions: InteractionEvent[];
   meetings_started: {
     meeting_id: number;
@@ -130,6 +174,14 @@ export type StepResponse = {
     started_tick: number;
   }[];
   pd_rounds: PDRoundEvent[];
+  food_consumed: {
+    agent_id: number;
+    food_id: number;
+    x: number;
+    y: number;
+    energy: number;
+    tick: number;
+  }[];
 };
 
 export async function stepWorld(
@@ -170,15 +222,40 @@ export async function fetchObservation(
   return (await res.json()) as ObservationResponse;
 }
 
+export async function fetchFood(): Promise<FoodResponse> {
+  const res = await fetch("/api/food");
+  if (!res.ok) {
+    throw new Error(await readApiError(res));
+  }
+  return (await res.json()) as FoodResponse;
+}
+
 export async function generateAgents(
-  count: number,
-  density: number,
-  life: LifeRules = DEFAULT_LIFE_RULES,
+  config: Pick<
+    WorldConfig,
+    | "count"
+    | "density"
+    | "life"
+    | "mapWidth"
+    | "mapHeight"
+    | "foodCapacity"
+    | "foodDensityRadius"
+    | "foodEnergy"
+  >,
 ): Promise<AgentsResponse> {
   const res = await fetch("/api/agents/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ count, density, life: lifeBody(life) }),
+    body: JSON.stringify({
+      count: config.count,
+      density: config.density,
+      map_width: config.mapWidth,
+      map_height: config.mapHeight,
+      food_capacity: config.foodCapacity,
+      food_density_radius: config.foodDensityRadius,
+      food_energy: config.foodEnergy,
+      life: lifeBody(config.life),
+    }),
   });
   if (!res.ok) {
     throw new Error(await readApiError(res));
@@ -204,12 +281,22 @@ export async function loadWorldConfig(name: string): Promise<WorldConfig> {
     name: string;
     count: number;
     density: number;
+    map_width?: number;
+    map_height?: number;
+    food_capacity?: number;
+    food_density_radius?: number;
+    food_energy?: number;
     life: LifeBody;
   };
   return {
     name: body.name,
     count: body.count,
     density: body.density,
+    mapWidth: body.map_width ?? DEFAULT_MAP_WIDTH,
+    mapHeight: body.map_height ?? DEFAULT_MAP_HEIGHT,
+    foodCapacity: body.food_capacity ?? DEFAULT_FOOD_CAPACITY,
+    foodDensityRadius: body.food_density_radius ?? DEFAULT_FOOD_DENSITY_RADIUS,
+    foodEnergy: body.food_energy ?? DEFAULT_FOOD_ENERGY,
     life: lifeFromBody(body.life),
   };
 }
@@ -224,6 +311,11 @@ export async function saveWorldConfig(config: WorldConfig): Promise<WorldConfig>
         name: config.name,
         count: config.count,
         density: config.density,
+        map_width: config.mapWidth,
+        map_height: config.mapHeight,
+        food_capacity: config.foodCapacity,
+        food_density_radius: config.foodDensityRadius,
+        food_energy: config.foodEnergy,
         life: lifeBody(config.life),
       }),
     },
@@ -235,12 +327,22 @@ export async function saveWorldConfig(config: WorldConfig): Promise<WorldConfig>
     name: string;
     count: number;
     density: number;
+    map_width: number;
+    map_height: number;
+    food_capacity: number;
+    food_density_radius: number;
+    food_energy: number;
     life: LifeBody;
   };
   return {
     name: body.name,
     count: body.count,
     density: body.density,
+    mapWidth: body.map_width,
+    mapHeight: body.map_height,
+    foodCapacity: body.food_capacity,
+    foodDensityRadius: body.food_density_radius,
+    foodEnergy: body.food_energy,
     life: lifeFromBody(body.life),
   };
 }

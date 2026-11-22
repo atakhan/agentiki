@@ -1,0 +1,15 @@
+---
+description: Code changes that affect behavior must update docs in the same change
+alwaysApply: true
+---
+
+# Docs follow code
+
+When changing simulation mechanics, API, config, UI behavior, or invariants:
+
+1. Update the matching files under `docs/` (and `README.md` if the public summary changes) in the **same** turn as the code.
+2. Prefer domain docs for product rules (`docs/02-domain/`), architecture/code docs for structure (`docs/03-architecture/`, `docs/04-code/`), and `docs/REVIEW.md` only for known gaps — do not leave contradicting statements.
+3. Before stating a rule in chat or docs, verify it against the current code (not memory or older markdown).
+4. Do not claim docs are done if behavior changed and the relevant doc section still describes the old rule.
+
+Examples of what must stay in sync: movement conflicts, EatAction/food/energy, map bounds, `enable_pd`, agent fields, HP costs, HTTP routes.

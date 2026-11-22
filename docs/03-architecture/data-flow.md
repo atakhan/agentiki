@@ -48,14 +48,15 @@ sequenceDiagram
 ## Генерация агентов
 
 ```text
-UI POST /api/agents/generate {count, density, life}
-  → set_life_rules, затем engine.generate_agents(...)
-    → AgentPopulation.clear + квадратная решётка
+UI POST /api/agents/generate {count, density, map_width, map_height, food_*, life}
+  → set_map_size / set_food_rules / set_life_rules, затем engine.generate_agents(...)
+    → AgentPopulation.clear + квадратная решётка внутри bounds
       spacing = clamp(round(density), 1, 10)
-  → AgentsOut
+    → spawn_initial_food(food_capacity)
+  → AgentsOut (+ GET /api/food)
 ```
 
-Seed, который движок передаёт в `generate`, на координаты не влияет.
+Seed, который движок передаёт в `generate`, на координаты агентов не влияет; спавн еды использует RNG.
 
 ## Step (play или HTTP)
 
@@ -72,14 +73,18 @@ flowchart LR
 Внутри `step_tick` (концептуально):
 
 ```text
-СВОБОДНЫЕ агенты: observe → strategy.choose
-interact intents → resolve_interactions по клеткам начала тика → создать встречи
-move intents → resolve_moves → apply_positions
+СВОБОДНЫЕ агенты: observe → strategy.choose (Eat / Move / Interact)
+IN_MEETING: при еде в радиусе → EatAction, иначе stay
+если enable_pd: interact intents → resolve_interactions → создать встречи
+  иначе InteractAction → stay
+move intents (Eat → stay) → resolve_moves (OOB → stay) → apply_positions
 траты hp: ход или stay; interact-решение
-продолжающиеся встречи → раунд PD (приток, затем стоимость раунда и continue/leave)
-новые встречи → раунд PD
+eat_intents → process_food_consumption → energy + replenish
+если enable_pd:
+  продолжающиеся встречи → раунд PD
+  новые встречи → раунд PD
 hp ≤ 0 → завершить встречу и удалить агента
-вернуть StepResult
+вернуть StepResult (food_consumed / food_spawned внутри; API step отдаёт food + food_consumed)
 ```
 
 Дистанция ≥ 2 на начало тика встречу не открывает. Уже открытая встреча на следующих тиках соседство не проверяет.
@@ -99,7 +104,8 @@ UI рисует оверлеи зрения / взаимодействия
 ```text
 camera + cellPx
   → видимый AABB мира
-  → renderGrid (локальный хеш ячейки / единый цвет)
+  → renderGrid (локальный хеш ячейки / единый цвет; только внутри карты)
+  → renderFood
   → renderAgents (анимированные позиции)
   → renderVisionDebug (если выбран агент)
   → renderInteractions (импульсы последнего step)

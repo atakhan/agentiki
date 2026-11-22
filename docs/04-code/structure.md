@@ -19,16 +19,19 @@ agentiki/
 │       ├── engine.py         # PythonEngine + create_engine
 │       ├── protocol.py       # SimulationEngine, Cell
 │       ├── tick.py           # оркестрация step_tick
-│       ├── world.py
+│       ├── world.py          # BoundedWorld
 │       ├── hashing.py
 │       ├── agents.py
 │       ├── spatial_hash.py
 │       ├── perception.py
-│       ├── actions.py
+│       ├── actions.py        # Move / Interact / Eat
 │       ├── movement.py
+│       ├── food.py
+│       ├── foraging.py
 │       ├── interactions.py
 │       ├── meetings.py
 │       ├── pd.py
+│       ├── genetics.py       # шкалы ШВГОП / ШПМ / ШЗ; тиком не вызывается
 │       ├── results.py
 │       ├── config.py
 │       └── strategy/
@@ -55,12 +58,15 @@ agentiki/
 
 | Файл | Фокус |
 | --- | --- |
-| `test_movement.py` | Разрешение ходов, детерминизм |
+| `test_movement.py` | Разрешение ходов, жеребьёвка, детерминизм, стены |
 | `test_interactions.py` | Контакты vs движение |
 | `test_meetings.py` | Встречи, PD, continue/leave |
+| `test_genetics.py` | Шкалы, окно истории, стоимость, сериализация генома |
 | `test_perception.py` | Радиусы зрения / interact, observe |
 | `test_hp.py` | Траты hp, смерть, нестандартные правила жизни |
+| `test_food.py` | Восприятие еды, seek, EatAction, split, replenish |
 | `test_generation.py` | Равномерная решётка и шаг density |
+| `test_world_bounds.py` | Карта W×H, contains, generate fit |
 | `test_world_configs.py` | Сохранение JSON и отказ при неверном порядке притока |
 
 ## Отсутствует (важные отсутствия)

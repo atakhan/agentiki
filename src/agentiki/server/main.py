@@ -19,6 +19,9 @@ from agentiki.server.schemas import (
     AgentOut,
     AgentsOut,
     CellOut,
+    FoodConsumptionOut,
+    FoodListOut,
+    FoodOut,
     GenerateAgentsIn,
     InteractionOut,
     LifeRulesIn,
@@ -31,6 +34,7 @@ from agentiki.server.schemas import (
     StepIn,
     StepOut,
     VisibleAgentOut,
+    VisibleFoodOut,
     WorldOut,
 )
 
@@ -44,12 +48,17 @@ def _engine(request: Request):
 
 def _apply_life(engine, life: LifeRulesIn) -> None:
     try:
+        if life.start_hp_max < life.start_hp_min:
+            raise ValueError("start_hp_max must be >= start_hp_min")
         engine.set_life_rules(
-            start_hp=life.start_hp,
-            hp_move=life.hp_move,
-            hp_stay=life.hp_stay,
-            hp_play_decision=life.hp_play_decision,
-            hp_game=life.hp_game,
+            start_hp_min=life.start_hp_min,
+            start_hp_max=life.start_hp_max,
+            hp_tick=life.hp_tick,
+            start_energy=life.start_energy,
+            energy_move=life.energy_move,
+            energy_stay=life.energy_stay,
+            energy_play_decision=life.energy_play_decision,
+            energy_game=life.energy_game,
             reward=life.reward,
             temptation=life.temptation,
             punishment=life.punishment,
@@ -62,6 +71,44 @@ def _apply_life(engine, life: LifeRulesIn) -> None:
         raise HTTPException(status_code=400, detail=message) from exc
 
 
+def _apply_food(
+    engine,
+    *,
+    food_capacity: int,
+    food_density_radius: int,
+    food_energy: float,
+) -> None:
+    try:
+        engine.set_food_rules(
+            food_capacity=food_capacity,
+            food_density_radius=food_density_radius,
+            food_energy=food_energy,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _food_out(food) -> FoodOut:
+    return FoodOut(id=food.id, x=food.cell_x, y=food.cell_y, energy=food.energy)
+
+
+def _food_list_out(food_items) -> FoodListOut:
+    items = [_food_out(item) for item in food_items]
+    return FoodListOut(count=len(items), food=items)
+
+
+def _food_consumption_out(event) -> FoodConsumptionOut:
+    return FoodConsumptionOut(
+        agent_id=event.agent_id,
+        food_id=event.food_id,
+        x=event.cell_x,
+        y=event.cell_y,
+        energy=event.energy,
+        tick=event.tick,
+        consumer_count=event.consumer_count,
+    )
+
+
 def _agent_out(agent) -> AgentOut:
     return AgentOut(
         id=agent.id,
@@ -70,6 +117,7 @@ def _agent_out(agent) -> AgentOut:
         pos_x=agent.pos_x,
         pos_y=agent.pos_y,
         hp=agent.hp,
+        energy=agent.energy,
         state=agent.state.value,
         meeting_id=agent.meeting_id,
     )
@@ -192,6 +240,12 @@ def world(request: Request) -> WorldOut:
         agent_count=engine.agent_count,
         vision_radius=cfg.vision_radius,
         interaction_radius=cfg.interaction_radius,
+        map_width=cfg.map_width,
+        map_height=cfg.map_height,
+        food_count=engine.food_count,
+        food_capacity=cfg.food_capacity,
+        food_density_radius=cfg.food_density_radius,
+        food_energy=cfg.food_energy,
     )
 
 
@@ -201,7 +255,10 @@ def world_cell(
     x: int = Query(),
     y: int = Query(),
 ) -> CellOut:
-    return _cell_out(_engine(request).cell(x, y))
+    try:
+        return _cell_out(_engine(request).cell(x, y))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/world/cells", response_model=list[CellOut])
@@ -233,9 +290,11 @@ def world_step(request: Request, body: StepIn) -> StepOut:
     return StepOut(
         world=world(request),
         agents=_agents_out(engine.list_agents()),
+        food=_food_list_out(engine.list_food()),
         interactions=[_interaction_out(item) for item in result.interactions],
         meetings_started=[_meeting_out(item) for item in result.meetings_started],
         pd_rounds=[_meeting_round_out(item) for item in result.meeting_outcomes],
+        food_consumed=[_food_consumption_out(item) for item in result.food_consumed],
     )
 
 
@@ -261,9 +320,24 @@ def list_agents(
     return _agents_out(agents)
 
 
+@app.get("/api/food", response_model=FoodListOut)
+def list_food(request: Request) -> FoodListOut:
+    return _food_list_out(_engine(request).list_food())
+
+
 @app.post("/api/agents/generate", response_model=AgentsOut)
 def generate_agents(request: Request, body: GenerateAgentsIn) -> AgentsOut:
     engine = _engine(request)
+    try:
+        engine.set_map_size(body.map_width, body.map_height)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _apply_food(
+        engine,
+        food_capacity=body.food_capacity,
+        food_density_radius=body.food_density_radius,
+        food_energy=body.food_energy,
+    )
     _apply_life(engine, body.life)
     try:
         agents = engine.generate_agents(
@@ -296,6 +370,14 @@ def agent_observation(request: Request, agent_id: int) -> ObservationOut:
                 relative_y=v.relative_y,
             )
             for v in observation.visible_agents
+        ],
+        visible_food=[
+            VisibleFoodOut(
+                food_id=v.food_id,
+                relative_x=v.relative_x,
+                relative_y=v.relative_y,
+            )
+            for v in observation.visible_food
         ],
     )
 

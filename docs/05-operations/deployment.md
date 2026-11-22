@@ -27,6 +27,7 @@ uvicorn agentiki.server.main:app --host 0.0.0.0 --port 8000
 
 * `AGENTIKI_SEED`
 * `AGENTIKI_SIM_BACKEND`
+* `AGENTIKI_CONFIG_DIR` — в Compose `/data/world_configs`, bind-mount на `./data/world_configs` хоста (конфиги спавна переживают rebuild)
 
 ### Health
 

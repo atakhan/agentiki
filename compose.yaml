@@ -6,6 +6,10 @@ services:
     environment:
       AGENTIKI_SEED: "1"
       AGENTIKI_SIM_BACKEND: python
+      AGENTIKI_CONFIG_DIR: /data/world_configs
+    volumes:
+      # Persist named spawn configs across rebuilds / container recreate.
+      - ./data/world_configs:/data/world_configs
     healthcheck:
       test:
         [

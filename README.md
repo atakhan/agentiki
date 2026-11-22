@@ -1,6 +1,6 @@
 # agentiki
 
-Браузерная симуляция эволюции: бесконечное двумерное поле, тысячи агентов (позже), детерминированный tick.
+Браузерная симуляция эволюции: фиксированное прямоугольное поле W×H, тысячи агентов (позже), детерминированный tick.
 
 Полная документация: [docs/README.md](docs/README.md).
 
@@ -12,7 +12,7 @@
 | Simulation core | Python (`src/agentiki/sim`) | Rust/pyo3 за тем же `SimulationEngine` |
 | UI | React + TypeScript + Canvas | без смены контракта |
 
-Поле бесконечное и считается по seed: ячейка `(x, y)` всегда одна и та же. Визуализатор в браузере использует тот же u32-hash, что и Python. Камера живёт на клиенте, сервер отдаёт конфиг мира.
+Карта — прямоугольник `[0 .. width) × [0 .. height)` (размер задаётся при создании мира, по умолчанию 64×64). Содержимое клетки по-прежнему считается из seed-hash; край жёсткий (ход за границу = stay). Камера на клиенте; сервер отдаёт `map_width` / `map_height`.
 
 Точка замены ядра: `create_engine(backend=...)`. Rust включается переменной `AGENTIKI_SIM_BACKEND=rust`, когда появится модуль `agentiki_sim_rust`.
 
@@ -49,15 +49,16 @@ npm run dev
 - `GET /api/world`
 - `GET /api/world/cell?x=&y=`
 - `GET /api/world/cells?min_x=&min_y=&max_x=&max_y=`
-- `POST /api/world/step` `{ "n": 1 }` → `{ "world", "agents", "interactions", "meetings_started", "pd_rounds" }`
+- `POST /api/world/step` `{ "n": 1 }` → `{ "world", "agents", "food", "food_consumed", "interactions", "meetings_started", "pd_rounds" }`
 - `POST /api/world/reset` `{ "seed": 1 }`
 - `GET /api/agents` (опционально `min_x`, `min_y`, `max_x`, `max_y`)
-- `POST /api/agents/generate` `{ "count": 100, "density": 1.0 }`
+- `POST /api/agents/generate` `{ "count": 100, "density": 1.0, "map_width": 64, "map_height": 64, "food_capacity": 50 }`
+- `GET /api/food`
 - `GET /api/agents/{id}/observation`
 
-Агент — круг в центре ячейки. Генерация случайная от центра `(0, 0)`, одна ячейка — один агент. Плотность: выше = компактнее у центра.
+Агент — круг в центре ячейки. Генерация — решётка с шагом `density` в центре карты; одна ячейка — один агент. Если не помещается — ошибка.
 
-Движение и контакт: каждый tick свободные агенты одновременно выбирают `Move` или `Interact` (временная случайная стратегия), затем разрешаются контакты → встречи (PD) и движение. Конфликт за клетку — побеждает минимальный `agent_id`.
+Движение: видит еду → идёт к ней. Поедание — отдельный tick (`EatAction`). `food_energy / n` → energy. **hp** — жизнь-таймер (random min…max, −1/тик, не пополняется). **energy** — старт 100 (конфиг мира), траты за действия, приток от еды/PD; ≤ 0 → смерть. PD по умолчанию выключен.
 
 Восприятие: `vision_radius` / `interaction_radius` (Чебышёв), `engine.observe(agent_id)` → `Observation` с относительными координатами. Клик по агенту на карте — debug-визуализация зон.
 

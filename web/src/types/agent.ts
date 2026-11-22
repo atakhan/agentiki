@@ -5,6 +5,7 @@ export type Agent = {
   pos_x: number;
   pos_y: number;
   hp: number;
+  energy: number;
   state: "FREE" | "IN_MEETING";
   meeting_id: number | null;
 };

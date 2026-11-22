@@ -5,8 +5,11 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 from dataclasses import replace
 
+import random
+
 from agentiki.sim.agents import Agent, AgentPopulation
 from agentiki.sim.config import SimulationConfig
+from agentiki.sim.food import Food, FoodStore, spawn_initial_food
 from agentiki.sim.pd import PayoffMatrix
 from agentiki.sim.interactions import Interaction
 from agentiki.sim.meetings import MeetingStore
@@ -17,7 +20,7 @@ from agentiki.sim.protocol import Cell, SimulationEngine
 from agentiki.sim.spatial_hash import SpatialHash
 from agentiki.sim.strategy import RandomTestStrategy
 from agentiki.sim.tick import step_tick
-from agentiki.sim.world import InfiniteWorld
+from agentiki.sim.world import BoundedWorld
 
 DEFAULT_SPATIAL_CELL_SIZE = 4.0
 
@@ -35,9 +38,12 @@ class PythonEngine:
         self._tick = 0
         self._spatial_cell_size = spatial_cell_size
         self._config = config or SimulationConfig()
-        self._world = InfiniteWorld(seed)
+        self._world = BoundedWorld(
+            seed, width=self._config.map_width, height=self._config.map_height
+        )
         self.spatial = SpatialHash(spatial_cell_size)
         self._agents = AgentPopulation()
+        self._food = FoodStore()
         self._generation = 0
         self._strategy = RandomTestStrategy()
         self._meetings = MeetingStore()
@@ -64,6 +70,10 @@ class PythonEngine:
         return len(self._agents)
 
     @property
+    def food_count(self) -> int:
+        return len(self._food)
+
+    @property
     def last_step_result(self) -> StepResult | None:
         return self._last_step_result
 
@@ -72,6 +82,9 @@ class PythonEngine:
         if self._last_step_result is None:
             return ()
         return self._last_step_result.interactions
+
+    def list_food(self) -> Sequence[Food]:
+        return self._food.list()
 
     def step(self, n: int = 1) -> StepResult:
         if n < 0:
@@ -87,6 +100,8 @@ class PythonEngine:
                     self._tick,
                     rng,
                     self._meetings,
+                    seed=self._seed,
+                    food_store=self._food,
                 )
                 accumulated = StepResult(
                     tick=result.tick + 1,
@@ -94,6 +109,8 @@ class PythonEngine:
                     meetings_started=accumulated.meetings_started + result.meetings_started,
                     pd_rounds=accumulated.pd_rounds + result.pd_rounds,
                     meeting_outcomes=accumulated.meeting_outcomes + result.meeting_outcomes,
+                    food_consumed=accumulated.food_consumed + result.food_consumed,
+                    food_spawned=accumulated.food_spawned + result.food_spawned,
                 )
             else:
                 accumulated = StepResult(
@@ -102,6 +119,8 @@ class PythonEngine:
                     meetings_started=accumulated.meetings_started,
                     pd_rounds=accumulated.pd_rounds,
                     meeting_outcomes=accumulated.meeting_outcomes,
+                    food_consumed=accumulated.food_consumed,
+                    food_spawned=accumulated.food_spawned,
                 )
             self._tick += 1
         self._last_step_result = accumulated
@@ -113,10 +132,33 @@ class PythonEngine:
         self._tick = 0
         self._generation = 0
         self._last_step_result = None
-        self._world = InfiniteWorld(self._seed)
+        self._world = BoundedWorld(
+            self._seed,
+            width=self._config.map_width,
+            height=self._config.map_height,
+        )
         self.spatial.clear()
         self._agents.clear()
+        self._food.clear()
         self._meetings.clear()
+
+    def set_map_size(self, width: int, height: int) -> None:
+        self._config = replace(self._config, map_width=width, map_height=height)
+        self._world = BoundedWorld(self._seed, width=width, height=height)
+
+    def set_food_rules(
+        self,
+        *,
+        food_capacity: int,
+        food_density_radius: int,
+        food_energy: float,
+    ) -> None:
+        self._config = replace(
+            self._config,
+            food_capacity=food_capacity,
+            food_density_radius=food_density_radius,
+            food_energy=float(food_energy),
+        )
 
     def cell(self, x: int, y: int) -> Cell:
         return self._world.cell(x, y)
@@ -148,28 +190,51 @@ class PythonEngine:
         count: int,
         density: float,
         *,
-        origin_x: int = 0,
-        origin_y: int = 0,
+        origin_x: int | None = None,
+        origin_y: int | None = None,
     ) -> Sequence[Agent]:
         gen_seed = self._seed ^ (self._generation * 0x9E3779B9) ^ (self._tick << 16)
         self._generation += 1
-        return self._agents.generate(
+        center_x = (
+            origin_x
+            if origin_x is not None
+            else (self._config.map_width - 1) // 2
+        )
+        center_y = (
+            origin_y
+            if origin_y is not None
+            else (self._config.map_height - 1) // 2
+        )
+        # Separate stream so food placement stays independent of hp rolls.
+        hp_rng = random.Random((gen_seed ^ 0x51EDF00D) & 0xFFFFFFFF)
+        agents = self._agents.generate(
             count=count,
             density=density,
             seed=gen_seed & 0xFFFFFFFF,
-            origin_x=origin_x,
-            origin_y=origin_y,
-            start_hp=self._config.start_hp,
+            origin_x=center_x,
+            origin_y=center_y,
+            start_hp_min=self._config.start_hp_min,
+            start_hp_max=self._config.start_hp_max,
+            start_energy=self._config.start_energy,
+            hp_rng=hp_rng,
+            map_width=self._config.map_width,
+            map_height=self._config.map_height,
         )
+        food_rng = random.Random(gen_seed & 0xFFFFFFFF)
+        spawn_initial_food(self._food, self._agents, self._config, food_rng)
+        return agents
 
     def set_life_rules(
         self,
         *,
-        start_hp: int,
-        hp_move: int,
-        hp_stay: int,
-        hp_play_decision: int,
-        hp_game: int,
+        start_hp_min: int,
+        start_hp_max: int,
+        hp_tick: int,
+        start_energy: float,
+        energy_move: int,
+        energy_stay: int,
+        energy_play_decision: int,
+        energy_game: int,
         reward: int,
         temptation: int,
         punishment: int,
@@ -178,11 +243,14 @@ class PythonEngine:
         # Later ticks and new spawns use these costs and incomes.
         self._config = replace(
             self._config,
-            start_hp=start_hp,
-            hp_move=hp_move,
-            hp_stay=hp_stay,
-            hp_play_decision=hp_play_decision,
-            hp_game=hp_game,
+            start_hp_min=start_hp_min,
+            start_hp_max=start_hp_max,
+            hp_tick=hp_tick,
+            start_energy=float(start_energy),
+            energy_move=energy_move,
+            energy_stay=energy_stay,
+            energy_play_decision=energy_play_decision,
+            energy_game=energy_game,
             payoff_matrix=PayoffMatrix(
                 reward=reward,
                 temptation=temptation,
@@ -195,7 +263,7 @@ class PythonEngine:
         agent = self._agents.get(agent_id)
         if agent is None:
             raise ValueError(f"unknown agent_id: {agent_id}")
-        return observe(agent, self._agents, self._config)
+        return observe(agent, self._agents, self._config, self._food)
 
 
 def create_engine(

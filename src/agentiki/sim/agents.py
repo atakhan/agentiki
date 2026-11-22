@@ -3,18 +3,24 @@
 from __future__ import annotations
 
 import math
+import random
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Iterator
 
+from agentiki.sim.genetics import Genome
 from agentiki.sim.spatial_hash import SpatialHash
 
 MAX_AGENTS = 100_000
 START_HP = 60
-HP_MOVE = 2
-HP_STAY = 1
-HP_PLAY_DECISION = 1
-HP_GAME = 1
+START_HP_MIN = 40
+START_HP_MAX = 80
+HP_TICK = 1
+ENERGY_MOVE = 2
+ENERGY_STAY = 1
+ENERGY_PLAY_DECISION = 1
+ENERGY_GAME = 1
+START_ENERGY = 100.0
 
 
 class AgentState(Enum):
@@ -27,7 +33,9 @@ class Agent:
     """Single agent anchored to a grid cell.
 
     ``pos_x`` / ``pos_y`` are normalized offsets inside the cell (0..1).
-    Movement and genomes can extend this model without changing the API shape.
+    Movement can extend this model without changing the API shape.
+    ``genome`` holds the three genetic scales when set. The tick does not
+    read or edit it; spawning does not assign one.
     """
 
     id: int
@@ -35,10 +43,11 @@ class Agent:
     cell_y: int
     pos_x: float = 0.5
     pos_y: float = 0.5
-    genome: bytes | None = None
+    genome: Genome | None = None
     state: AgentState = AgentState.FREE
     meeting_id: int | None = None
     hp: int = START_HP
+    energy: float = START_ENERGY
 
     @property
     def world_x(self) -> float:
@@ -51,6 +60,14 @@ class Agent:
 
 def spend_hp(agent: Agent, amount: int) -> None:
     agent.hp = max(0, agent.hp - amount)
+
+
+def spend_energy(agent: Agent, amount: float) -> None:
+    agent.energy = max(0.0, float(agent.energy) - float(amount))
+
+
+def gain_energy(agent: Agent, amount: float) -> None:
+    agent.energy = float(agent.energy) + float(amount)
 
 
 @dataclass
@@ -136,22 +153,43 @@ class AgentPopulation:
         seed: int,
         origin_x: int = 0,
         origin_y: int = 0,
-        start_hp: int = START_HP,
+        start_hp_min: int = START_HP_MIN,
+        start_hp_max: int = START_HP_MAX,
+        start_energy: float = START_ENERGY,
+        hp_rng: random.Random | None = None,
+        map_width: int | None = None,
+        map_height: int | None = None,
     ) -> list[Agent]:
-        """Place agents on a square lattice centered at the origin.
+        """Place agents on a square lattice centered at ``(origin_x, origin_y)``.
 
         ``density`` is the spacing in cells to the nearest neighbor
         (axis-aligned distance). Placement is uniform and deterministic;
         ``seed`` is kept for API compatibility and does not affect positions.
+        Starting hp is drawn uniformly from ``[start_hp_min, start_hp_max]``.
+
+        When ``map_width`` / ``map_height`` are set, every cell must lie in
+        ``[0, width) × [0, height)`` and ``count`` must not exceed map area.
         """
         del seed
         if count < 1:
             raise ValueError("count must be >= 1")
-        if start_hp < 1:
-            raise ValueError("start_hp must be >= 1")
+        if start_hp_min < 1:
+            raise ValueError("start_hp_min must be >= 1")
+        if start_hp_max < start_hp_min:
+            raise ValueError("start_hp_max must be >= start_hp_min")
+        if start_energy < 0:
+            raise ValueError("start_energy must be >= 0")
         if count > MAX_AGENTS:
             raise ValueError(f"count must be <= {MAX_AGENTS}")
+        if map_width is not None and map_height is not None:
+            if map_width < 1 or map_height < 1:
+                raise ValueError("map dimensions must be >= 1")
+            if count > map_width * map_height:
+                raise ValueError(
+                    f"count {count} exceeds map capacity {map_width * map_height}"
+                )
         spacing = max(1, min(10, int(round(density))))
+        rng = hp_rng if hp_rng is not None else random.Random(0)
 
         self.clear()
 
@@ -164,11 +202,20 @@ class AgentPopulation:
         for index in range(count):
             col = index % cols
             row = index // cols
+            cell_x = x0 + col * spacing
+            cell_y = y0 + row * spacing
+            if map_width is not None and map_height is not None:
+                if not (0 <= cell_x < map_width and 0 <= cell_y < map_height):
+                    raise ValueError(
+                        f"placement does not fit map {map_width}×{map_height} "
+                        f"with count={count} density={spacing}"
+                    )
             agent = Agent(
                 id=self._next_id,
-                cell_x=x0 + col * spacing,
-                cell_y=y0 + row * spacing,
-                hp=start_hp,
+                cell_x=cell_x,
+                cell_y=cell_y,
+                hp=rng.randint(start_hp_min, start_hp_max),
+                energy=float(start_energy),
             )
             self._next_id += 1
             self._add(agent)
